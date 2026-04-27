@@ -145,5 +145,3 @@ Si usas FishLab en un trabajo académico:
 MIT — ver [LICENSE](./LICENSE).
 
 ---
-
-Hecho con ❤️ para Ecología General · UJTL
