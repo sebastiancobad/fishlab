@@ -10,9 +10,8 @@ FishLab es una herramienta didáctica para cursos de **Ecología** que combina s
 
 ## Demo en vivo
 
-👉 **https://USUARIO.github.io/fishlab/**
+ **https://sebastiancobad.github.io/fishlab/**
 
-(Reemplaza `USUARIO` por tu nombre de usuario de GitHub tras publicar.)
 
 ## Características
 
