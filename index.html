@@ -1,0 +1,2654 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FishLab · Lotka–Volterra &amp; Holling FR</title>
+<style>
+  :root {
+    --bg: #eaeef0;
+    --bg2: #dde3e6;
+    --panel: #fafbfc;
+    --panel2: #f0f3f5;
+    --border: #c9d1d6;
+    --border-soft: #dde3e6;
+    --ink: #14181f;
+    --ink-soft: #2e3642;
+    --muted: #6a7177;
+    --accent: #2d6b5e;
+    --accent2: #5a9d8a;
+    --gold: #c89b4a;
+    --sp1: #3a72aa;
+    --sp2: #b84a3e;
+    --data: #7a9146;
+    --data2: #c89b4a;
+    --evt-encounter: #e8c547;
+    --evt-attack: #d97a3a;
+    --evt-capture: #ffffff;
+    --mono: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+    --serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+  }
+  body {
+    min-height: 100vh;
+    padding: 22px;
+    background-image:
+      radial-gradient(ellipse at 10% 0%, rgba(45,107,94,.05), transparent 50%),
+      radial-gradient(ellipse at 90% 100%, rgba(58,114,170,.04), transparent 50%);
+  }
+  .shell { max-width: 1520px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+  }
+  .brand {
+    font-family: var(--serif);
+    font-size: 36px;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .brand em { font-style: italic; color: var(--accent); }
+  .brand .dot { color: var(--sp2); font-style: normal; }
+  .sub {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  .mode-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    margin-bottom: 18px;
+    border: 1.5px solid var(--ink);
+    background: var(--panel);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .mode-btn {
+    background: transparent;
+    border: none;
+    padding: 12px 18px;
+    font-family: var(--serif);
+    font-size: 15px;
+    font-style: italic;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+    border-right: 1.5px solid var(--ink);
+  }
+  .mode-btn:last-child { border-right: none; }
+  .mode-btn:hover { background: var(--bg2); }
+  .mode-btn.active { background: var(--ink); color: var(--panel); }
+  .mode-btn .tag {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-style: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    margin-bottom: 3px;
+  }
+  .mode-btn.active .tag { color: var(--gold); }
+
+  .hero {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(0,0,0,.02), 0 14px 32px -20px rgba(20,30,50,.18);
+    margin-bottom: 18px;
+  }
+  .hero-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel2);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .hero-title { font-family: var(--serif); font-size: 19px; font-style: italic; }
+  .hero-title em { color: var(--accent); }
+  .hero-stats { display: flex; gap: 22px; font-family: var(--mono); font-size: 12px; flex-wrap: wrap; }
+  .stat { display: flex; gap: 8px; align-items: center; }
+  .stat .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .stat-label { color: var(--muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.12em; }
+  .stat-val { color: var(--ink); font-weight: 700; min-width: 30px; text-align: right; font-size: 13px; }
+
+  canvas { display: block; }
+  #worldCanvas { width: 100%; height: 540px; background: #1a3550; }
+
+  .hero-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--panel2);
+    flex-wrap: wrap;
+  }
+  .hero-controls .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hero-controls .speed {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    min-width: 220px;
+  }
+  .hero-controls .speed input[type=range] { flex: 1; max-width: 260px; }
+  .tick-counter {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 700;
+    min-width: 110px;
+    text-align: right;
+  }
+
+  button.ctl {
+    background: var(--accent);
+    color: var(--panel);
+    border: none;
+    padding: 9px 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+  }
+  button.ctl:hover { background: #1d4d43; transform: translateY(-1px); }
+  button.ctl.alt {
+    background: transparent;
+    color: var(--ink);
+    border: 1.5px solid var(--border);
+  }
+  button.ctl.alt:hover { border-color: var(--accent); color: var(--accent); background: rgba(45,107,94,.06); }
+  button.ctl.red { background: var(--sp2); color: white; }
+  button.ctl.red:hover { background: #9c3d33; }
+  button.ctl.gold { background: var(--gold); color: var(--ink); }
+  button.ctl.gold:hover { background: #ae8538; }
+  button.ctl:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 320px 1fr 320px;
+    gap: 16px;
+  }
+  @media (max-width: 1240px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 16px;
+    box-shadow: 0 1px 0 rgba(0,0,0,.02), 0 10px 24px -18px rgba(20,30,50,.12);
+  }
+  .panel h3 {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    margin: 0 0 11px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--border);
+    color: var(--accent);
+  }
+  .panel h3:not(:first-child) { margin-top: 18px; }
+  .panel h3::before { content: "§ "; color: var(--sp2); }
+
+  .params-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+  .params-grid .param-full { grid-column: 1 / -1; }
+
+  .param { margin-bottom: 9px; }
+  .param-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 3px;
+    gap: 4px;
+  }
+  .param-label {
+    font-size: 12px;
+    color: var(--ink);
+    font-family: var(--serif);
+    line-height: 1.2;
+    flex: 1;
+    min-width: 0;
+  }
+  .param-label .greek { color: var(--accent); font-style: italic; font-weight: 700; margin-right: 4px; }
+  .param-label .desc {
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 10px;
+    font-style: normal;
+    display: block;
+    margin-top: 1px;
+  }
+  .param-value {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 2px 5px;
+    width: 55px;
+    text-align: right;
+    border-radius: 2px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .param-value:focus { outline: 1.5px solid var(--accent); outline-offset: -1px; }
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 2px;
+    background: var(--border);
+    outline: none;
+    margin-top: 2px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 13px; height: 13px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  }
+
+  .btn-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .btn-row button.ctl { flex: 1; }
+
+  .plot-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    border-radius: 3px;
+    box-shadow: 0 1px 0 rgba(0,0,0,.02), 0 10px 24px -18px rgba(20,30,50,.12);
+    margin-bottom: 14px;
+  }
+  .plot-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .plot-title { font-family: var(--serif); font-size: 16px; font-style: italic; }
+  .plot-title em { color: var(--accent); }
+  .plot-legend {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-box { width: 14px; height: 3px; display: inline-block; border-radius: 1px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .legend-tri { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid var(--data); display: inline-block; }
+  #plotCanvas, #frPlotCanvas { width: 100%; height: 230px; background: var(--bg); border-radius: 2px; }
+
+  .file-drop {
+    border: 1.5px dashed var(--border);
+    padding: 14px;
+    text-align: center;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    border-radius: 2px;
+    transition: all .15s;
+    background: var(--bg);
+  }
+  .file-drop:hover, .file-drop.drag {
+    border-color: var(--accent);
+    color: var(--ink);
+    background: rgba(45,107,94,.06);
+  }
+  .file-drop strong { color: var(--accent); font-family: var(--serif); font-style: italic; font-size: 14px; }
+  .file-drop input { display: none; }
+  .data-status {
+    margin-top: 8px;
+    padding: 7px 9px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    border-radius: 2px;
+  }
+  .data-status.ok { border-color: var(--data); color: var(--data); background: rgba(122,145,70,.08); }
+  .data-status.err { border-color: var(--sp2); color: var(--sp2); background: rgba(184,74,62,.06); }
+
+  .metrics { font-family: var(--mono); font-size: 10.5px; line-height: 1.8; }
+  .metrics .k { color: var(--muted); }
+  .metrics .v { color: var(--ink); float: right; font-weight: 700; }
+  .metrics .row { border-bottom: 1px dashed var(--border-soft); padding: 3px 0; }
+  .metrics .row:last-child { border-bottom: none; }
+
+  details { margin-top: 12px; font-size: 11.5px; line-height: 1.55; }
+  details summary {
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    padding: 5px 0;
+  }
+  details p { color: var(--muted); margin: 5px 0; }
+  details code {
+    background: var(--bg); padding: 1px 5px; border-radius: 2px;
+    font-family: var(--mono); font-size: 10.5px; color: var(--accent);
+  }
+  details pre {
+    background: var(--bg); padding: 8px; border-radius: 2px;
+    font-family: var(--mono); font-size: 10px;
+    border: 1px solid var(--border); overflow-x: auto;
+    margin: 6px 0; color: var(--ink);
+  }
+
+  .eq-box {
+    background: var(--bg);
+    padding: 12px 14px;
+    border-left: 3px solid var(--accent);
+    margin-top: 8px;
+    font-family: var(--serif);
+    font-size: 14px;
+    line-height: 2.2;
+    border-radius: 0 2px 2px 0;
+  }
+  .eq-box .eq-n { font-family: var(--mono); color: var(--muted); font-size: 10px; margin-right: 12px; }
+  .eq-box em.p { color: var(--accent); font-style: italic; font-weight: 700; }
+
+  /* ======== Holling-specific ======== */
+  .event-log {
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: 2px;
+    height: 180px;
+    overflow-y: auto;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    line-height: 1.55;
+  }
+  .event-log .ev-row { padding: 1px 0; }
+  .event-log .ev-row.encounter { color: #b89530; }
+  .event-log .ev-row.attack { color: #c45f2a; }
+  .event-log .ev-row.capture { color: var(--sp2); font-weight: 700; }
+  .event-log .ev-time { color: var(--muted); margin-right: 6px; }
+
+  .results-table {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+  }
+  .results-table th, .results-table td {
+    padding: 4px 6px;
+    text-align: right;
+    border-bottom: 1px dashed var(--border-soft);
+  }
+  .results-table th {
+    text-align: right;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 9.5px;
+  }
+  .results-table th:first-child, .results-table td:first-child { text-align: left; }
+  .results-table tr:last-child td { border-bottom: none; }
+  .results-table .ctl-mini {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 18px; height: 18px;
+    cursor: pointer;
+    border-radius: 2px;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+  }
+  .results-table .ctl-mini:hover { color: var(--sp2); border-color: var(--sp2); }
+
+  /* ======== Lab data form ======== */
+  .lab-form { font-family: var(--sans); font-size: 11px; }
+  .lab-treatment {
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: 2px;
+    padding: 8px 9px;
+    margin-bottom: 8px;
+  }
+  .lab-tr-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .lab-tr-header strong {
+    font-family: var(--serif);
+    font-size: 13px;
+    font-style: italic;
+    color: var(--accent);
+  }
+  .lab-tr-header .lab-add-rep {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .lab-tr-header .lab-add-rep:hover {
+    background: var(--accent); color: var(--panel); border-color: var(--accent);
+  }
+  .lab-tr-header .lab-del-tr {
+    background: transparent; border: none;
+    color: var(--muted); cursor: pointer;
+    font-size: 14px; padding: 0 4px;
+    margin-left: 6px;
+  }
+  .lab-tr-header .lab-del-tr:hover { color: var(--sp2); }
+  .lab-form table { width: 100%; border-collapse: collapse; }
+  .lab-form thead th {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    text-align: center;
+    padding: 2px 1px;
+    font-weight: 600;
+    border-bottom: 1px dashed var(--border-soft);
+  }
+  .lab-form tbody td {
+    text-align: center;
+    padding: 2px 1px;
+  }
+  .lab-form tbody td.r-label {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--muted);
+    text-align: left;
+    padding-left: 2px;
+  }
+  .lab-input {
+    width: 30px;
+    padding: 3px 2px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--ink);
+    border-radius: 2px;
+    text-align: center;
+  }
+  .lab-input:focus {
+    outline: 1.5px solid var(--accent);
+    outline-offset: -1px;
+    border-color: var(--accent);
+  }
+  .lab-input.wide { width: 36px; }
+  .lab-del-rep {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 1px;
+    line-height: 1;
+  }
+  .lab-del-rep:hover { color: var(--sp2); }
+  .lab-add-tr {
+    width: 100%;
+    background: transparent;
+    border: 1.5px dashed var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 6px;
+    border-radius: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-top: 4px;
+  }
+  .lab-add-tr:hover { border-color: var(--accent); color: var(--accent); }
+  .lab-summary {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    margin-top: 4px;
+  }
+  .lab-summary th, .lab-summary td {
+    padding: 4px 5px;
+    border-bottom: 1px dashed var(--border-soft);
+    text-align: right;
+  }
+  .lab-summary th {
+    color: var(--muted);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .lab-summary th:first-child, .lab-summary td:first-child { text-align: left; }
+  .lab-summary tr.empty td { color: var(--muted); font-style: italic; text-align: center; }
+  .lab-help {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background: var(--bg);
+    border-left: 2px solid var(--gold);
+    border-radius: 0 2px 2px 0;
+  }
+  .lab-help b { color: var(--ink); font-weight: 700; }
+
+  .fit-result {
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--bg);
+    border-left: 3px solid var(--gold);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    line-height: 1.7;
+  }
+  .fit-result .row { display: flex; justify-content: space-between; }
+  .fit-result .k { color: var(--muted); }
+  .fit-result .v { color: var(--ink); font-weight: 700; }
+
+  .progress {
+    height: 4px;
+    background: var(--border-soft);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress > div {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.1s linear;
+    width: 0%;
+  }
+
+  .footer {
+    margin-top: 22px;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--muted);
+    text-align: center;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .footer .mark { color: var(--accent); }
+
+  .mode-note {
+    background: rgba(200,155,74,.12);
+    border-left: 3px solid var(--gold);
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    line-height: 1.45;
+    font-style: italic;
+    font-family: var(--serif);
+  }
+
+  .quick-N {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .quick-N button {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    padding: 5px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .quick-N button:hover { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div>
+      <div class="brand">Fish<em>Lab</em><span class="dot">.</span></div>
+      <div class="sub">Lotka–Volterra · Competencia · Respuesta Funcional Holling</div>
+    </div>
+    <div class="sub">v5.0 · UJTL Lab Edition</div>
+  </header>
+
+  <div class="mode-strip">
+    <button class="mode-btn active" data-mode="predation">
+      <span class="tag">Modo 1 · ABM</span>
+      Depredador–Presa LV
+    </button>
+    <button class="mode-btn" data-mode="competition">
+      <span class="tag">Modo 2 · ABM</span>
+      Competencia inter-específica
+    </button>
+    <button class="mode-btn" data-mode="holling">
+      <span class="tag">Modo 3 · Lab UJTL</span>
+      Respuesta funcional (Holling)
+    </button>
+  </div>
+
+  <section class="hero">
+    <div class="hero-bar">
+      <div class="hero-title">Acuario <em>virtual</em></div>
+      <div class="hero-stats" id="worldStats"></div>
+    </div>
+    <canvas id="worldCanvas"></canvas>
+    <div class="hero-controls">
+      <div class="btn-group" id="ctlGroup"></div>
+      <div class="speed">
+        <span>Velocidad</span>
+        <input type="range" id="speedSlider" min="1" max="10" step="1" value="3">
+      </div>
+      <div class="tick-counter" id="tickCount">tick 0</div>
+    </div>
+  </section>
+
+  <div class="grid">
+
+    <aside class="panel">
+      <div id="paramPanelContent"></div>
+    </aside>
+
+    <main id="centerColumn">
+      <div class="plot-card">
+        <div class="plot-bar">
+          <div class="plot-title" id="plot1Title">Series de <em>población</em></div>
+          <div class="plot-legend" id="plotLegend"></div>
+        </div>
+        <canvas id="plotCanvas"></canvas>
+      </div>
+
+      <div class="plot-card" id="plot2Card">
+        <div class="plot-bar">
+          <div class="plot-title" id="plot2Title">Modelo <em>teórico</em> (ODE)</div>
+          <div class="plot-legend" id="modelTag"></div>
+        </div>
+        <div id="plot2Body">
+          <div class="eq-box" id="eqBox"></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="panel" id="rightPanel">
+      <div id="rightPanelContent"></div>
+    </aside>
+
+  </div>
+
+  <div class="footer">
+    <span class="mark">§</span> FishLab v5 · población · competencia · respuesta funcional · offline
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ==================================================================
+   FishLab v5 — Tres modos: LV Predación, LV Competencia, Holling FR
+   ================================================================== */
+
+let currentMode = 'predation';
+let agents = [];
+let tick = 0;
+let history = { t: [], A: [], B: [] };
+let running = false;
+let rafId = null;
+let ticksPerFrame = 3;
+let realData = null;
+
+// Holling-specific state
+const hollingState = {
+  events: [],            // {type, time, prey_id}
+  cycles: [],            // [{enc_time, attack_time?, capture_time?, prey_id}]
+  results: [],           // accumulated experiment results
+  experimentRunning: false,
+  startTick: 0,
+  visualEvents: [],
+  predState: 'searching',
+  predTarget: null,
+  predHandlingTimer: 0,
+  cycleId: 0,
+  // Datos del lab — estructura siguiendo Tabla 1 de la guía UJTL
+  // Cada tratamiento tiene N réplicas; cada réplica registra valores observados en el lab
+  labData: {
+    treatments: [
+      { N0: 8,  replicas: [emptyReplica()] },
+      { N0: 12, replicas: [emptyReplica()] },
+      { N0: 18, replicas: [emptyReplica()] },
+      { N0: 25, replicas: [emptyReplica()] },
+    ]
+  },
+};
+
+function emptyReplica() {
+  return { enc: null, att: null, cap: null, rem: null, t1att: null, ctrl: null };
+}
+
+const modeParams = {
+  predation: {
+    N0: 80, P0: 15,
+    preyRepro: 0.06, preySpd: 1.1, K: 600,
+    vision: 30, predSpd: 1.8,
+    eatGain: 10, metab: 0.35, predRepro: 0.15, reproEnergy: 30,
+    refugeN: 10, immigInterval: 20,
+  },
+  competition: {
+    N0_A: 60, N0_B: 60,
+    r_A: 0.06, K_A: 300, alpha_AB: 0.8,
+    r_B: 0.05, K_B: 280, alpha_BA: 0.7,
+    d_A: 0.002, d_B: 0.002,
+    spd_A: 1.0, spd_B: 1.0,
+  },
+  holling: {
+    N0: 12,                  // presas iniciales
+    duration: 1800,          // ticks por experimento (≈30 min si 1 tick=1 s)
+    encounterRadius: 65,     // px ≈ 3 cm de detección
+    attackRadius: 14,        // px — distancia para iniciar ataque
+    captureProb: 0.55,       // probabilidad de éxito por ataque
+    handlingTime: 30,        // ticks de manejo (≈1 s)
+    predSpd: 2.0,            // velocidad pez
+    preySpd: 0.6,            // velocidad daphnia
+    naturalMortality: 0.0001 // mortalidad natural por tick
+  },
+};
+let P = modeParams.predation;
+let tScale = 0.1;
+
+const worldCanvas = document.getElementById('worldCanvas');
+const plotCanvas  = document.getElementById('plotCanvas');
+const worldCtx = worldCanvas.getContext('2d');
+const plotCtx  = plotCanvas.getContext('2d');
+let W = 800, H = 540;
+let frPlotCanvas = null, frPlotCtx = null;
+
+function resizeCanvases() {
+  const dpr = window.devicePixelRatio || 1;
+  const wr = worldCanvas.getBoundingClientRect();
+  worldCanvas.width  = wr.width  * dpr;
+  worldCanvas.height = wr.height * dpr;
+  worldCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  W = wr.width; H = wr.height;
+  const pr = plotCanvas.getBoundingClientRect();
+  plotCanvas.width  = pr.width  * dpr;
+  plotCanvas.height = pr.height * dpr;
+  plotCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (frPlotCanvas) {
+    const fr = frPlotCanvas.getBoundingClientRect();
+    frPlotCanvas.width = fr.width * dpr;
+    frPlotCanvas.height = fr.height * dpr;
+    frPlotCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+}
+
+let agentIdCounter = 0;
+class Agent {
+  constructor(species, x, y) {
+    this.id = agentIdCounter++;
+    this.species = species;
+    this.x = x; this.y = y;
+    this.heading = Math.random() * Math.PI * 2;
+    this.alive = true;
+    this.age = 0;
+    this.wiggle = Math.random() * 100;
+    this.energy = (currentMode === 'predation' && species === 'B') ? 20 + Math.random() * 15 : 0;
+    if (currentMode === 'holling') {
+      this.size = species === 'A' ? 3.5 : 9;  // daphnias muy pequeñas, pez grande
+    } else {
+      this.size = species === 'A' ? 4 : (currentMode === 'predation' ? 7 : 5);
+    }
+  }
+  wrap() {
+    if (this.x < 0) this.x += W;
+    if (this.x >= W) this.x -= W;
+    if (this.y < 0) this.y += H;
+    if (this.y >= H) this.y -= H;
+  }
+
+  stepPredation(ags, Na) {
+    if (this.species === 'A') {
+      let threat = null, md = 200;
+      for (const a of ags) {
+        if (a.species !== 'B' || !a.alive) continue;
+        const d = Math.hypot(this.x - a.x, this.y - a.y);
+        if (d < 25 && d < md) { md = d; threat = a; }
+      }
+      if (threat) this.heading = Math.atan2(this.y - threat.y, this.x - threat.x) + (Math.random() - 0.5) * 0.3;
+      else this.heading += (Math.random() - 0.5) * 0.5;
+      this.x += Math.cos(this.heading) * P.preySpd;
+      this.y += Math.sin(this.heading) * P.preySpd;
+      this.wrap();
+      let rp = P.preyRepro;
+      if (P.K > 0) rp *= Math.max(0, 1 - Na / P.K);
+      if (Math.random() < rp) {
+        ags.push(new Agent('A', this.x + (Math.random()-.5)*8, this.y + (Math.random()-.5)*8));
+      }
+    } else {
+      let tgt = null, md = P.vision;
+      for (const a of ags) {
+        if (a.species !== 'A' || !a.alive) continue;
+        const d = Math.hypot(this.x - a.x, this.y - a.y);
+        if (d < md) { md = d; tgt = a; }
+      }
+      if (tgt) this.heading = Math.atan2(tgt.y - this.y, tgt.x - this.x) + (Math.random() - 0.5) * 0.1;
+      else this.heading += (Math.random() - 0.5) * 0.4;
+      this.x += Math.cos(this.heading) * P.predSpd;
+      this.y += Math.sin(this.heading) * P.predSpd;
+      this.wrap();
+      let ate = false;
+      for (const a of ags) {
+        if (a.species !== 'A' || !a.alive) continue;
+        if (Math.hypot(this.x - a.x, this.y - a.y) < this.size + a.size) {
+          a.alive = false;
+          this.energy += P.eatGain;
+          ate = true;
+          break;
+        }
+      }
+      this.energy -= P.metab;
+      if (this.energy <= 0) this.alive = false;
+      if (ate && this.energy > P.reproEnergy && Math.random() < P.predRepro) {
+        const baby = new Agent('B', this.x + (Math.random()-.5)*10, this.y + (Math.random()-.5)*10);
+        baby.energy = this.energy / 2;
+        this.energy = this.energy / 2;
+        ags.push(baby);
+      }
+    }
+  }
+
+  stepCompetition(ags, Na, Nb) {
+    this.heading += (Math.random() - 0.5) * 0.6;
+    const spd = this.species === 'A' ? P.spd_A : P.spd_B;
+    this.x += Math.cos(this.heading) * spd;
+    this.y += Math.sin(this.heading) * spd;
+    this.wrap();
+    if (this.species === 'A') {
+      const occ = (Na + P.alpha_AB * Nb) / P.K_A;
+      const rp = P.r_A * Math.max(0, 1 - occ);
+      if (Math.random() < rp) {
+        ags.push(new Agent('A', this.x + (Math.random()-.5)*8, this.y + (Math.random()-.5)*8));
+      }
+      const mortExtra = Math.max(0, occ - 1) * 0.05;
+      if (Math.random() < P.d_A + mortExtra) this.alive = false;
+    } else {
+      const occ = (Nb + P.alpha_BA * Na) / P.K_B;
+      const rp = P.r_B * Math.max(0, 1 - occ);
+      if (Math.random() < rp) {
+        ags.push(new Agent('B', this.x + (Math.random()-.5)*8, this.y + (Math.random()-.5)*8));
+      }
+      const mortExtra = Math.max(0, occ - 1) * 0.05;
+      if (Math.random() < P.d_B + mortExtra) this.alive = false;
+    }
+  }
+
+  // Comportamiento de presa Daphnia para Holling: deriva lenta
+  stepHollingPrey() {
+    this.heading += (Math.random() - 0.5) * 0.7;
+    const spd = P.preySpd * (0.5 + Math.random() * 0.8);
+    this.x += Math.cos(this.heading) * spd;
+    this.y += Math.sin(this.heading) * spd;
+    // ligera deriva vertical (típico de Daphnia)
+    this.y += (Math.random() - 0.5) * 0.4;
+    this.wrap();
+    // mortalidad natural
+    if (Math.random() < P.naturalMortality) this.alive = false;
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.heading);
+    this.wiggle += 0.3;
+    const wg = Math.sin(this.wiggle) * 2;
+
+    if (currentMode === 'holling' && this.species === 'A') {
+      // Daphnia: forma de gota con "antenas"
+      ctx.fillStyle = '#a8b0a0';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, this.size + 1, this.size * 1.1, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#5c6358';
+      ctx.beginPath();
+      ctx.arc(this.size * 0.3, -this.size * 0.5, 0.7, 0, Math.PI*2);
+      ctx.fill();
+      // antenas
+      ctx.strokeStyle = '#6a7066';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(this.size * 0.5, 0);
+      ctx.lineTo(this.size + 3, -this.size * 0.5);
+      ctx.moveTo(this.size * 0.5, 0);
+      ctx.lineTo(this.size + 3, this.size * 0.5);
+      ctx.stroke();
+    } else if (this.species === 'A') {
+      ctx.fillStyle = '#3a72aa';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, this.size + 1.5, this.size * 0.62, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#6ea0cf';
+      ctx.beginPath();
+      ctx.ellipse(0.5, -0.8, this.size, this.size * 0.3, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#2a5478';
+      ctx.beginPath();
+      ctx.moveTo(-this.size - 1, 0);
+      ctx.lineTo(-this.size - 5, -3 + wg*0.5);
+      ctx.lineTo(-this.size - 5,  3 + wg*0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#0c1420';
+      ctx.beginPath();
+      ctx.arc(this.size * 0.55, -1, 0.9, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      // Pez depredador
+      ctx.fillStyle = '#b84a3e';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, this.size + 2, this.size * 0.58, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#7a2920';
+      for (let i=-2; i<=2; i+=2) {
+        ctx.beginPath();
+        ctx.ellipse(i, 0, 0.7, this.size * 0.52, 0, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#8a3028';
+      ctx.beginPath();
+      ctx.moveTo(-this.size - 2, 0);
+      ctx.lineTo(-this.size - 7, -5 + wg*0.5);
+      ctx.lineTo(-this.size - 7,  5 + wg*0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#8a3028';
+      ctx.beginPath();
+      ctx.moveTo(-2, -this.size*0.5);
+      ctx.lineTo(2, -this.size - 2);
+      ctx.lineTo(4, -this.size*0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#0c1420';
+      ctx.beginPath();
+      ctx.arc(this.size * 0.65, -1.5, 1.2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#f0f4f0';
+      ctx.beginPath();
+      ctx.arc(this.size * 0.72, -1.8, 0.4, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function initSim() {
+  agents = [];
+  agentIdCounter = 0;
+  tick = 0;
+  history = { t: [], A: [], B: [] };
+  if (currentMode === 'predation') {
+    for (let i = 0; i < P.N0; i++) agents.push(new Agent('A', Math.random()*W, Math.random()*H));
+    for (let i = 0; i < P.P0; i++) agents.push(new Agent('B', Math.random()*W, Math.random()*H));
+  } else if (currentMode === 'competition') {
+    for (let i = 0; i < P.N0_A; i++) agents.push(new Agent('A', Math.random()*W, Math.random()*H));
+    for (let i = 0; i < P.N0_B; i++) agents.push(new Agent('B', Math.random()*W, Math.random()*H));
+  } else {
+    // holling: 1 depredador centrado, N0 presas distribuidas
+    for (let i = 0; i < P.N0; i++) agents.push(new Agent('A', Math.random()*W, Math.random()*H));
+    agents.push(new Agent('B', W/2, H/2));
+    // reset event tracking
+    hollingState.events = [];
+    hollingState.cycles = [];
+    hollingState.visualEvents = [];
+    hollingState.predState = 'searching';
+    hollingState.predTarget = null;
+    hollingState.predHandlingTimer = 0;
+    hollingState.cycleId = 0;
+    hollingState.startTick = 0;
+  }
+  recordHistory();
+}
+
+function recordHistory() {
+  let nA = 0, nB = 0;
+  for (const a of agents) {
+    if (!a.alive) continue;
+    if (a.species === 'A') nA++; else nB++;
+  }
+  history.t.push(tick);
+  history.A.push(nA);
+  history.B.push(nB);
+  return { nA, nB };
+}
+
+function stepHolling() {
+  // mover presas
+  for (const a of agents) {
+    if (a.alive && a.species === 'A') a.stepHollingPrey();
+  }
+
+  // depredador con state machine
+  const pred = agents.find(a => a.species === 'B' && a.alive);
+  if (!pred) return;
+
+  if (hollingState.predHandlingTimer > 0) {
+    hollingState.predHandlingTimer--;
+    // depredador "ocupado": deriva lenta
+    pred.heading += (Math.random() - 0.5) * 0.3;
+    pred.x += Math.cos(pred.heading) * P.predSpd * 0.2;
+    pred.y += Math.sin(pred.heading) * P.predSpd * 0.2;
+    pred.wrap();
+    if (hollingState.predHandlingTimer === 0) hollingState.predState = 'searching';
+    return;
+  }
+
+  if (hollingState.predState === 'searching') {
+    // buscar presa más cercana dentro del radio de encuentro
+    let nearest = null, md = P.encounterRadius;
+    for (const a of agents) {
+      if (a.species !== 'A' || !a.alive) continue;
+      const d = Math.hypot(pred.x - a.x, pred.y - a.y);
+      if (d < md) { md = d; nearest = a; }
+    }
+    if (nearest) {
+      // ENCUENTRO
+      hollingState.cycleId++;
+      const cycle = { id: hollingState.cycleId, enc_time: tick, prey_id: nearest.id, attack_time: null, capture_time: null };
+      hollingState.cycles.push(cycle);
+      hollingState.events.push({ type: 'encounter', time: tick, prey_id: nearest.id, cycle_id: cycle.id });
+      hollingState.visualEvents.push({ type: 'encounter', x: nearest.x, y: nearest.y, life: 30 });
+      hollingState.predTarget = nearest;
+      hollingState.predState = 'pursuing';
+    } else {
+      // random walk
+      pred.heading += (Math.random() - 0.5) * 0.4;
+      pred.x += Math.cos(pred.heading) * P.predSpd * 0.6;
+      pred.y += Math.sin(pred.heading) * P.predSpd * 0.6;
+      pred.wrap();
+    }
+  }
+
+  if (hollingState.predState === 'pursuing') {
+    const target = hollingState.predTarget;
+    if (!target || !target.alive) {
+      hollingState.predState = 'searching';
+      hollingState.predTarget = null;
+      return;
+    }
+    const d = Math.hypot(pred.x - target.x, pred.y - target.y);
+    if (d > P.encounterRadius * 1.6) {
+      // perdió la presa
+      hollingState.predState = 'searching';
+      hollingState.predTarget = null;
+      return;
+    }
+    // perseguir
+    pred.heading = Math.atan2(target.y - pred.y, target.x - pred.x) + (Math.random() - 0.5) * 0.1;
+    pred.x += Math.cos(pred.heading) * P.predSpd;
+    pred.y += Math.sin(pred.heading) * P.predSpd;
+    pred.wrap();
+
+    if (d <= P.attackRadius) {
+      // ATAQUE
+      const cycle = hollingState.cycles[hollingState.cycles.length - 1];
+      if (cycle.attack_time === null) cycle.attack_time = tick;
+      hollingState.events.push({ type: 'attack', time: tick, prey_id: target.id, cycle_id: cycle.id });
+      hollingState.visualEvents.push({ type: 'attack', x: (pred.x + target.x)/2, y: (pred.y + target.y)/2, life: 20 });
+      if (Math.random() < P.captureProb) {
+        // CAPTURA
+        target.alive = false;
+        cycle.capture_time = tick;
+        hollingState.events.push({ type: 'capture', time: tick, prey_id: target.id, cycle_id: cycle.id });
+        hollingState.visualEvents.push({ type: 'capture', x: target.x, y: target.y, life: 40 });
+        hollingState.predState = 'handling';
+        hollingState.predHandlingTimer = P.handlingTime;
+        hollingState.predTarget = null;
+      } else {
+        // ataque fallido: presa huye
+        target.heading = Math.atan2(target.y - pred.y, target.x - pred.x);
+        target.x += Math.cos(target.heading) * P.preySpd * 4;
+        target.y += Math.sin(target.heading) * P.preySpd * 4;
+        target.wrap();
+        hollingState.predState = 'searching';
+        hollingState.predTarget = null;
+      }
+    }
+  }
+
+  // limpiar muertos (presas eaten)
+  agents = agents.filter(a => a.alive);
+
+  // actualizar visualEvents (decrementar life)
+  hollingState.visualEvents = hollingState.visualEvents.filter(e => --e.life > 0);
+}
+
+function stepOnce() {
+  tick++;
+
+  if (currentMode === 'holling') {
+    stepHolling();
+    if (tick % 4 === 0) recordHistory();
+    updateStatsUI();
+    // chequear fin de experimento
+    if (hollingState.experimentRunning && (tick - hollingState.startTick) >= P.duration) {
+      finishExperiment();
+    }
+    return;
+  }
+
+  // LV modes
+  const nA = agents.filter(a => a.alive && a.species === 'A').length;
+  const nB = agents.filter(a => a.alive && a.species === 'B').length;
+  const shuffled = agents.slice().sort(() => Math.random() - 0.5);
+  for (const a of shuffled) {
+    if (!a.alive) continue;
+    if (currentMode === 'predation') a.stepPredation(agents, nA);
+    else a.stepCompetition(agents, nA, nB);
+  }
+  agents = agents.filter(a => a.alive);
+  if (currentMode === 'predation' && P.immigInterval > 0 && tick % P.immigInterval === 0) {
+    const nPrey = agents.filter(a => a.species === 'A').length;
+    if (nPrey < P.refugeN) {
+      agents.push(new Agent('A', Math.random()*W, Math.random()*H));
+    }
+  }
+  if (tick % 2 === 0) recordHistory();
+  updateStatsUI();
+  if (agents.length === 0) pause();
+}
+
+function drawWorld() {
+  const grad = worldCtx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#2d5472');
+  grad.addColorStop(0.5, '#1a3550');
+  grad.addColorStop(1, '#0c1e30');
+  worldCtx.fillStyle = grad;
+  worldCtx.fillRect(0, 0, W, H);
+
+  const light = worldCtx.createRadialGradient(W/2, -80, 30, W/2, -80, W * 0.9);
+  light.addColorStop(0, 'rgba(180,220,240,.18)');
+  light.addColorStop(1, 'rgba(100,180,220,0)');
+  worldCtx.fillStyle = light;
+  worldCtx.fillRect(0, 0, W, H);
+
+  worldCtx.strokeStyle = 'rgba(200,230,250,.04)';
+  worldCtx.lineWidth = 1;
+  for (let i = 0; i < 6; i++) {
+    worldCtx.beginPath();
+    const yOff = (tick * 0.3 + i*60) % (H + 120);
+    for (let x = 0; x <= W; x += 10) {
+      const y = yOff - 60 + Math.sin((x + tick) * 0.02 + i) * 10;
+      if (x === 0) worldCtx.moveTo(x, y); else worldCtx.lineTo(x, y);
+    }
+    worldCtx.stroke();
+  }
+
+  worldCtx.fillStyle = 'rgba(230,245,255,.25)';
+  for (let i = 0; i < 10; i++) {
+    const bx = ((i * 97 + tick * 0.8) % W);
+    const by = (H - (tick * 1.5 + i * 70) % (H + 80));
+    const br = 1.2 + (i % 3) * 0.7;
+    worldCtx.beginPath();
+    worldCtx.arc(bx, by, br, 0, Math.PI*2);
+    worldCtx.fill();
+  }
+
+  // En modo Holling, mostrar el radio de visión del depredador como halo tenue
+  if (currentMode === 'holling') {
+    const pred = agents.find(a => a.species === 'B' && a.alive);
+    if (pred) {
+      worldCtx.strokeStyle = 'rgba(232,197,71,.15)';
+      worldCtx.lineWidth = 1;
+      worldCtx.setLineDash([3, 4]);
+      worldCtx.beginPath();
+      worldCtx.arc(pred.x, pred.y, P.encounterRadius, 0, Math.PI*2);
+      worldCtx.stroke();
+      worldCtx.setLineDash([]);
+    }
+
+    // Eventos visuales (encuentros, ataques, capturas)
+    for (const ev of hollingState.visualEvents) {
+      const alpha = ev.life / 40;
+      if (ev.type === 'encounter') {
+        worldCtx.strokeStyle = `rgba(232,197,71,${alpha * 0.8})`;
+        worldCtx.lineWidth = 1.5;
+        const r = 8 + (40 - ev.life) * 0.3;
+        worldCtx.beginPath();
+        worldCtx.arc(ev.x, ev.y, r, 0, Math.PI*2);
+        worldCtx.stroke();
+      } else if (ev.type === 'attack') {
+        worldCtx.fillStyle = `rgba(217,122,58,${alpha})`;
+        worldCtx.beginPath();
+        worldCtx.arc(ev.x, ev.y, 5 + (20 - ev.life) * 0.5, 0, Math.PI*2);
+        worldCtx.fill();
+      } else if (ev.type === 'capture') {
+        worldCtx.strokeStyle = `rgba(255,255,255,${alpha})`;
+        worldCtx.lineWidth = 2;
+        worldCtx.beginPath();
+        worldCtx.arc(ev.x, ev.y, 8 + (40 - ev.life) * 0.6, 0, Math.PI*2);
+        worldCtx.stroke();
+      }
+    }
+  }
+
+  for (const a of agents) a.draw(worldCtx);
+}
+
+function drawPlot() {
+  const rect = plotCanvas.getBoundingClientRect();
+  const w = rect.width, h = rect.height;
+  plotCtx.clearRect(0, 0, w, h);
+  plotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg').trim();
+  plotCtx.fillRect(0, 0, w, h);
+
+  const padL = 42, padR = 12, padT = 12, padB = 26;
+  const pW = w - padL - padR;
+  const pH = h - padT - padB;
+
+  let maxT, maxY;
+  let cumEnc = [], cumAtt = [], cumCap = [];
+
+  if (currentMode === 'holling') {
+    // Para Holling, mostrar curvas acumuladas de eventos en función del tiempo
+    maxT = Math.max(P.duration, 100);
+    cumEnc = []; cumAtt = []; cumCap = [];
+    let e=0, a=0, c=0;
+    for (let t = 0; t <= maxT; t += Math.max(1, Math.floor(maxT/200))) {
+      while (e < hollingState.events.length && hollingState.events.filter(ev=>ev.type==='encounter').filter(ev=>ev.time<=t).length > cumEnc.length-1) break;
+    }
+    // Construir conteos en cada tick muestreado
+    const samplePoints = [];
+    const stepSize = Math.max(1, Math.floor(maxT / 150));
+    for (let t = 0; t <= maxT; t += stepSize) {
+      let ne=0, na=0, nc=0;
+      for (const ev of hollingState.events) {
+        if (ev.time <= tick && ev.time <= hollingState.startTick + t) {
+          if (ev.type === 'encounter') ne++;
+          else if (ev.type === 'attack') na++;
+          else if (ev.type === 'capture') nc++;
+        }
+      }
+      samplePoints.push({t, ne, na, nc});
+    }
+    maxY = Math.max(10, ...samplePoints.map(s=>s.ne));
+
+    // grid
+    plotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border-soft').trim();
+    plotCtx.lineWidth = 1;
+    plotCtx.font = '9.5px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    plotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim();
+    for (let i=0; i<=4; i++) {
+      const y = padT + pH * (1 - i/4);
+      plotCtx.beginPath();
+      plotCtx.moveTo(padL, y);
+      plotCtx.lineTo(padL + pW, y);
+      plotCtx.stroke();
+      plotCtx.textAlign = 'right';
+      plotCtx.fillText(Math.round(maxY * i/4), padL - 5, y + 3);
+    }
+    for (let i=0; i<=6; i++) {
+      const x = padL + pW * i/6;
+      plotCtx.textAlign = 'center';
+      plotCtx.fillText(Math.round(maxT * i/6), x, padT + pH + 14);
+    }
+
+    // ejes
+    plotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--ink').trim();
+    plotCtx.lineWidth = 1.2;
+    plotCtx.beginPath();
+    plotCtx.moveTo(padL, padT); plotCtx.lineTo(padL, padT+pH); plotCtx.lineTo(padL+pW, padT+pH);
+    plotCtx.stroke();
+    plotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--ink').trim();
+    plotCtx.font = 'italic 11px ' + getComputedStyle(document.body).getPropertyValue('--serif');
+    plotCtx.textAlign = 'center';
+    plotCtx.fillText('tick (tiempo)', padL+pW/2, h-5);
+    plotCtx.save(); plotCtx.translate(11, padT+pH/2); plotCtx.rotate(-Math.PI/2);
+    plotCtx.fillText('eventos acum.', 0, 0); plotCtx.restore();
+
+    const px = t => padL + pW * t / maxT;
+    const py = v => padT + pH * (1 - v / maxY);
+
+    // dibujar líneas
+    function drawSeries(key, color, lw=1.8) {
+      plotCtx.strokeStyle = color;
+      plotCtx.lineWidth = lw;
+      plotCtx.beginPath();
+      let started = false;
+      for (const s of samplePoints) {
+        const x = px(s.t), y = py(s[key]);
+        if (!started) { plotCtx.moveTo(x, y); started = true; }
+        else plotCtx.lineTo(x, y);
+      }
+      plotCtx.stroke();
+    }
+    drawSeries('ne', '#e8c547', 2);
+    drawSeries('na', '#d97a3a', 1.8);
+    drawSeries('nc', getComputedStyle(document.body).getPropertyValue('--sp2').trim(), 2);
+
+    return;
+  }
+
+  // ===== LV modes (predation, competition) =====
+  maxT = Math.max(...history.t, 100);
+  maxY = Math.max(...history.A, ...history.B, 20);
+  if (realData) {
+    const maxTdata = realData.t[realData.t.length - 1] / tScale;
+    maxT = Math.max(maxT, maxTdata);
+    maxY = Math.max(maxY, Math.max(...realData.N));
+    if (realData.P) maxY = Math.max(maxY, Math.max(...realData.P));
+  }
+  maxY = Math.ceil(maxY * 1.1 / 10) * 10;
+  maxT = Math.max(maxT, 50);
+
+  plotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border-soft').trim();
+  plotCtx.lineWidth = 1;
+  plotCtx.font = '9.5px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  plotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim();
+  for (let i=0; i<=4; i++) {
+    const y = padT + pH * (1 - i/4);
+    plotCtx.beginPath(); plotCtx.moveTo(padL, y); plotCtx.lineTo(padL + pW, y); plotCtx.stroke();
+    plotCtx.textAlign = 'right';
+    plotCtx.fillText(Math.round(maxY * i/4), padL - 5, y + 3);
+  }
+  for (let i=0; i<=6; i++) {
+    const x = padL + pW * i/6;
+    plotCtx.textAlign = 'center';
+    plotCtx.fillText(Math.round(maxT * i/6), x, padT + pH + 14);
+  }
+
+  plotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--ink').trim();
+  plotCtx.lineWidth = 1.2;
+  plotCtx.beginPath();
+  plotCtx.moveTo(padL, padT); plotCtx.lineTo(padL, padT + pH); plotCtx.lineTo(padL + pW, padT + pH);
+  plotCtx.stroke();
+  plotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--ink').trim();
+  plotCtx.font = 'italic 11px ' + getComputedStyle(document.body).getPropertyValue('--serif');
+  plotCtx.textAlign = 'center';
+  plotCtx.fillText('tick', padL + pW/2, h - 5);
+  plotCtx.save(); plotCtx.translate(11, padT + pH/2); plotCtx.rotate(-Math.PI/2);
+  plotCtx.fillText('N', 0, 0); plotCtx.restore();
+
+  const px = t => padL + pW * t / maxT;
+  const py = v => padT + pH * (1 - v / maxY);
+
+  plotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--sp1').trim();
+  plotCtx.lineWidth = 1.8;
+  plotCtx.beginPath();
+  for (let i=0; i<history.t.length; i++) {
+    const x = px(history.t[i]), y = py(history.A[i]);
+    if (i===0) plotCtx.moveTo(x, y); else plotCtx.lineTo(x, y);
+  }
+  plotCtx.stroke();
+
+  plotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--sp2').trim();
+  plotCtx.lineWidth = 1.8;
+  plotCtx.beginPath();
+  for (let i=0; i<history.t.length; i++) {
+    const x = px(history.t[i]), y = py(history.B[i]);
+    if (i===0) plotCtx.moveTo(x, y); else plotCtx.lineTo(x, y);
+  }
+  plotCtx.stroke();
+
+  if (realData) {
+    plotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--data').trim();
+    plotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--bg').trim();
+    plotCtx.lineWidth = 1.2;
+    for (let i=0; i<realData.t.length; i++) {
+      const tTick = realData.t[i] / tScale;
+      const x = px(tTick), y = py(realData.N[i]);
+      plotCtx.beginPath();
+      plotCtx.arc(x, y, 3.5, 0, Math.PI*2);
+      plotCtx.fill(); plotCtx.stroke();
+    }
+    if (realData.P) {
+      plotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--data2').trim();
+      for (let i=0; i<realData.t.length; i++) {
+        if (realData.P[i] == null) continue;
+        const tTick = realData.t[i] / tScale;
+        const x = px(tTick), y = py(realData.P[i]);
+        plotCtx.beginPath();
+        plotCtx.moveTo(x, y-3.5); plotCtx.lineTo(x+3.5, y);
+        plotCtx.lineTo(x, y+3.5); plotCtx.lineTo(x-3.5, y);
+        plotCtx.closePath();
+        plotCtx.fill(); plotCtx.stroke();
+      }
+    }
+  }
+}
+
+// Plot de respuesta funcional (Holling)
+function drawFRPlot() {
+  if (!frPlotCanvas || !frPlotCtx) return;
+  const rect = frPlotCanvas.getBoundingClientRect();
+  const w = rect.width, h = rect.height;
+  frPlotCtx.clearRect(0, 0, w, h);
+  frPlotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg').trim();
+  frPlotCtx.fillRect(0, 0, w, h);
+
+  const padL = 42, padR = 12, padT = 12, padB = 28;
+  const pW = w - padL - padR;
+  const pH = h - padT - padB;
+
+  // Datos a graficar: simulados (results) y reales (realData)
+  const simPts = hollingState.results.map(r => ({ x: r.N0, y: r.captures }));
+  const realPts = getLabFRPoints();
+  const allPts = [...simPts, ...realPts];
+
+  let maxX = 30, maxY = 10;
+  if (allPts.length) {
+    maxX = Math.ceil(Math.max(...allPts.map(p=>p.x)) * 1.2 / 5) * 5;
+    maxY = Math.max(5, Math.ceil(Math.max(...allPts.map(p=>p.y)) * 1.3));
+  }
+
+  // Ajuste Holling Type II: Na = aTN/(1+aThN). Usamos T=duration en ticks.
+  let fitParams = null;
+  if (simPts.length >= 2 || realPts.length >= 2) {
+    fitParams = fitHollingII([...simPts, ...realPts], P.duration);
+  }
+
+  // grid
+  frPlotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border-soft').trim();
+  frPlotCtx.lineWidth = 1;
+  frPlotCtx.font = '9.5px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+  frPlotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim();
+  for (let i=0; i<=4; i++) {
+    const y = padT + pH * (1 - i/4);
+    frPlotCtx.beginPath();
+    frPlotCtx.moveTo(padL, y); frPlotCtx.lineTo(padL+pW, y);
+    frPlotCtx.stroke();
+    frPlotCtx.textAlign = 'right';
+    frPlotCtx.fillText((maxY * i / 4).toFixed(1), padL - 5, y + 3);
+  }
+  for (let i=0; i<=6; i++) {
+    const x = padL + pW * i/6;
+    frPlotCtx.textAlign = 'center';
+    frPlotCtx.fillText(Math.round(maxX * i/6), x, padT + pH + 14);
+  }
+
+  // ejes
+  frPlotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--ink').trim();
+  frPlotCtx.lineWidth = 1.2;
+  frPlotCtx.beginPath();
+  frPlotCtx.moveTo(padL, padT); frPlotCtx.lineTo(padL, padT+pH); frPlotCtx.lineTo(padL+pW, padT+pH);
+  frPlotCtx.stroke();
+  frPlotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--ink').trim();
+  frPlotCtx.font = 'italic 11px ' + getComputedStyle(document.body).getPropertyValue('--serif');
+  frPlotCtx.textAlign = 'center';
+  frPlotCtx.fillText('N₀  ·  presas ofrecidas', padL + pW/2, h - 6);
+  frPlotCtx.save(); frPlotCtx.translate(11, padT + pH/2); frPlotCtx.rotate(-Math.PI/2);
+  frPlotCtx.fillText('Nₐ  ·  presas consumidas', 0, 0); frPlotCtx.restore();
+
+  const xpx = v => padL + pW * v / maxX;
+  const ypx = v => padT + pH * (1 - v / maxY);
+
+  // curva de ajuste Holling II
+  if (fitParams) {
+    frPlotCtx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+    frPlotCtx.lineWidth = 1.5;
+    frPlotCtx.setLineDash([5, 3]);
+    frPlotCtx.beginPath();
+    for (let xi = 0; xi <= maxX; xi += 0.5) {
+      const yv = fitParams.a * P.duration * xi / (1 + fitParams.a * fitParams.Th * xi);
+      const x = xpx(xi), y = ypx(yv);
+      if (xi === 0) frPlotCtx.moveTo(x, y);
+      else frPlotCtx.lineTo(x, y);
+    }
+    frPlotCtx.stroke();
+    frPlotCtx.setLineDash([]);
+  }
+
+  // puntos simulados (círculos teal)
+  frPlotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+  frPlotCtx.strokeStyle = '#fff';
+  frPlotCtx.lineWidth = 1.5;
+  for (const p of simPts) {
+    const x = xpx(p.x), y = ypx(p.y);
+    frPlotCtx.beginPath();
+    frPlotCtx.arc(x, y, 4.5, 0, Math.PI*2);
+    frPlotCtx.fill(); frPlotCtx.stroke();
+  }
+
+  // puntos reales (triángulos verdes)
+  frPlotCtx.fillStyle = getComputedStyle(document.body).getPropertyValue('--data').trim();
+  frPlotCtx.strokeStyle = '#fff';
+  for (const p of realPts) {
+    const x = xpx(p.x), y = ypx(p.y);
+    frPlotCtx.beginPath();
+    frPlotCtx.moveTo(x, y - 5);
+    frPlotCtx.lineTo(x + 4.5, y + 4);
+    frPlotCtx.lineTo(x - 4.5, y + 4);
+    frPlotCtx.closePath();
+    frPlotCtx.fill(); frPlotCtx.stroke();
+  }
+
+  // panel de parámetros de ajuste
+  const fitBox = document.getElementById('fitParamsBox');
+  if (fitBox) {
+    if (fitParams) {
+      const halfSat = fitParams.a * fitParams.Th > 0 ? (1/(fitParams.a * fitParams.Th)) : null;
+      const asymptote = fitParams.Th > 0 ? (P.duration / fitParams.Th) : null;
+      fitBox.innerHTML = `
+        <div class="row"><span class="k">a (tasa ataque)</span><span class="v">${fitParams.a.toExponential(3)}</span></div>
+        <div class="row"><span class="k">Tₕ (tiempo manejo)</span><span class="v">${fitParams.Th.toFixed(2)} ticks</span></div>
+        <div class="row"><span class="k">R²</span><span class="v">${fitParams.r2 !== null ? fitParams.r2.toFixed(4) : '—'}</span></div>
+        <div class="row"><span class="k">RMSE</span><span class="v">${fitParams.rmse.toFixed(2)} presas</span></div>
+        <div class="row"><span class="k">n puntos</span><span class="v">${fitParams.n}</span></div>
+        <div class="row"><span class="k">N₀ saturación ½</span><span class="v">${halfSat !== null && isFinite(halfSat) ? halfSat.toFixed(1) : '—'}</span></div>
+        <div class="row"><span class="k">Asíntota Nₐ→ (T/Tₕ)</span><span class="v">${asymptote !== null && isFinite(asymptote) ? asymptote.toFixed(1) : '—'}</span></div>
+      `;
+    } else {
+      fitBox.innerHTML = '<div style="color:var(--muted);text-align:center;font-size:10.5px">Necesitas ≥ 2 puntos (sim o lab) para ajustar</div>';
+    }
+  }
+}
+
+// ===== Holling Type II fit por Nelder-Mead =====
+function fitHollingII(points, T) {
+  if (points.length < 2) return null;
+  // función objetivo: RSS con restricción a, Th >= 0
+  const objective = (vec) => {
+    const a = Math.max(1e-10, vec[0]);
+    const Th = Math.max(0, vec[1]);
+    let rss = 0;
+    for (const p of points) {
+      const pred = (a * T * p.x) / (1 + a * Th * p.x);
+      rss += (pred - p.y) ** 2;
+    }
+    return rss;
+  };
+  // estimación inicial
+  const maxN0 = Math.max(...points.map(p=>p.x));
+  const maxNa = Math.max(...points.map(p=>p.y));
+  const a0 = Math.max(1e-6, maxNa / (T * maxN0));
+  const Th0 = Math.max(1, T / Math.max(1, maxNa) * 0.5);
+  const result = nelderMead(objective, [a0, Th0], { maxIter: 800, step: 0.3 });
+  // forzar resultado al dominio físico válido
+  const a = Math.max(1e-10, result.x[0]);
+  const Th = Math.max(0, result.x[1]);
+  // R² = 1 - SS_res / SS_tot
+  const meanY = points.reduce((s,p)=>s+p.y, 0) / points.length;
+  const ssTot = points.reduce((s,p)=>s + (p.y - meanY)**2, 0);
+  const r2 = ssTot > 0 ? Math.max(0, 1 - result.f / ssTot) : null;
+  // RMSE
+  const rmse = Math.sqrt(result.f / points.length);
+  return { a, Th, rss: result.f, r2, rmse, n: points.length };
+}
+
+function nelderMead(f, x0, opts) {
+  opts = opts || {};
+  const maxIter = opts.maxIter || 400;
+  const step = opts.step || 0.1;
+  const tol = opts.tol || 1e-7;
+  const n = x0.length;
+  const simplex = [x0.slice()];
+  for (let i=0; i<n; i++) {
+    const v = x0.slice();
+    v[i] = v[i] * (1 + step) + (v[i]===0 ? step : 0);
+    simplex.push(v);
+  }
+  let fs = simplex.map(f);
+  for (let it=0; it<maxIter; it++) {
+    const order = fs.map((v,i)=>[v,i]).sort((a,b)=>a[0]-b[0]);
+    const sorted = order.map(o => simplex[o[1]]);
+    const sortedF = order.map(o => o[0]);
+    for (let i=0;i<=n;i++){ simplex[i]=sorted[i]; fs[i]=sortedF[i]; }
+    if (fs[n] - fs[0] < tol) break;
+    const xo = new Array(n).fill(0);
+    for (let i=0; i<n; i++) for (let j=0; j<n; j++) xo[j] += simplex[i][j]/n;
+    const xr = xo.map((v,j) => v + (v - simplex[n][j]));
+    const fr = f(xr);
+    if (fr < fs[0]) {
+      const xe = xo.map((v,j) => v + 2*(xr[j] - v));
+      const fe = f(xe);
+      if (fe < fr) { simplex[n]=xe; fs[n]=fe; }
+      else { simplex[n]=xr; fs[n]=fr; }
+    } else if (fr < fs[n-1]) {
+      simplex[n]=xr; fs[n]=fr;
+    } else {
+      const xc = xo.map((v,j) => v + 0.5*(simplex[n][j] - v));
+      const fc = f(xc);
+      if (fc < fs[n]) { simplex[n]=xc; fs[n]=fc; }
+      else {
+        for (let i=1; i<=n; i++) {
+          simplex[i] = simplex[0].map((v,j) => v + 0.5*(simplex[i][j]-v));
+          fs[i] = f(simplex[i]);
+        }
+      }
+    }
+  }
+  const best = fs.indexOf(Math.min(...fs));
+  return { x: simplex[best], f: fs[best] };
+}
+
+function updateStatsUI() {
+  const nA = agents.filter(a => a.species === 'A').length;
+  const nB = agents.filter(a => a.species === 'B').length;
+  document.getElementById('tickCount').textContent = currentMode === 'holling'
+    ? `tick ${tick} / ${P.duration}`
+    : 'tick ' + tick;
+
+  if (currentMode === 'holling') {
+    const ne = hollingState.events.filter(e=>e.type==='encounter').length;
+    const na = hollingState.events.filter(e=>e.type==='attack').length;
+    const nc = hollingState.events.filter(e=>e.type==='capture').length;
+    document.getElementById('worldStats').innerHTML = `
+      <div class="stat"><span class="dot" style="background:#a8b0a0"></span><span><span class="stat-label">Daphnia</span> <span class="stat-val">${nA}</span></span></div>
+      <div class="stat"><span class="dot" style="background:var(--evt-encounter)"></span><span><span class="stat-label">Encuentros</span> <span class="stat-val">${ne}</span></span></div>
+      <div class="stat"><span class="dot" style="background:var(--evt-attack)"></span><span><span class="stat-label">Ataques</span> <span class="stat-val">${na}</span></span></div>
+      <div class="stat"><span class="dot" style="background:var(--sp2)"></span><span><span class="stat-label">Capturas</span> <span class="stat-val">${nc}</span></span></div>
+    `;
+    // progress bar
+    const prog = document.getElementById('expProgress');
+    if (prog) {
+      const pct = hollingState.experimentRunning ? Math.min(100, ((tick - hollingState.startTick) / P.duration) * 100) : 0;
+      prog.style.width = pct + '%';
+    }
+    // event log
+    const log = document.getElementById('eventLog');
+    if (log) {
+      const recent = hollingState.events.slice(-50).reverse();
+      log.innerHTML = recent.map(ev => {
+        const tStr = ((ev.time) * tScale).toFixed(1) + 's';
+        if (ev.type === 'encounter') return `<div class="ev-row encounter"><span class="ev-time">${tStr}</span>encuentro #${ev.cycle_id} · presa ${ev.prey_id}</div>`;
+        if (ev.type === 'attack') return `<div class="ev-row attack"><span class="ev-time">${tStr}</span>ataque · presa ${ev.prey_id}</div>`;
+        if (ev.type === 'capture') return `<div class="ev-row capture"><span class="ev-time">${tStr}</span>★ CAPTURA · presa ${ev.prey_id}</div>`;
+      }).join('');
+    }
+    return;
+  }
+
+  // LV modes
+  document.getElementById('worldStats').innerHTML = currentMode === 'predation'
+    ? `<div class="stat"><span class="dot" style="background:var(--sp1)"></span><span><span class="stat-label">Presa</span> <span class="stat-val">${nA}</span></span></div>
+       <div class="stat"><span class="dot" style="background:var(--sp2)"></span><span><span class="stat-label">Depred.</span> <span class="stat-val">${nB}</span></span></div>`
+    : `<div class="stat"><span class="dot" style="background:var(--sp1)"></span><span><span class="stat-label">Sp.1</span> <span class="stat-val">${nA}</span></span></div>
+       <div class="stat"><span class="dot" style="background:var(--sp2)"></span><span><span class="stat-label">Sp.2</span> <span class="stat-val">${nB}</span></span></div>`;
+
+  const mA = Math.max(...history.A, 0);
+  const mB = Math.max(...history.B, 0);
+  const rmse = realData ? computeRMSE() : null;
+  const metricsBox = document.getElementById('metricsBox');
+  if (metricsBox) {
+    metricsBox.innerHTML = `
+      <div class="row"><span class="k">Tick</span><span class="v">${tick}</span></div>
+      <div class="row"><span class="k">${currentMode === 'predation' ? 'Presa' : 'Sp.1'} (ahora)</span><span class="v">${nA}</span></div>
+      <div class="row"><span class="k">${currentMode === 'predation' ? 'Depred.' : 'Sp.2'} (ahora)</span><span class="v">${nB}</span></div>
+      <div class="row"><span class="k">${currentMode === 'predation' ? 'Presa' : 'Sp.1'} (max hist.)</span><span class="v">${mA}</span></div>
+      <div class="row"><span class="k">${currentMode === 'predation' ? 'Depred.' : 'Sp.2'} (max hist.)</span><span class="v">${mB}</span></div>
+      <div class="row"><span class="k">RMSE vs datos</span><span class="v">${rmse != null ? rmse.toFixed(2) : '—'}</span></div>
+    `;
+  }
+}
+
+function computeRMSE() {
+  if (!realData || history.t.length < 2) return null;
+  let sum = 0, count = 0;
+  for (let i=0; i<realData.t.length; i++) {
+    const tTick = realData.t[i] / tScale;
+    let idx = 0;
+    while (idx < history.t.length && history.t[idx] < tTick) idx++;
+    if (idx >= history.t.length) continue;
+    let simA, simB;
+    if (idx === 0) { simA = history.A[0]; simB = history.B[0]; }
+    else {
+      const t0 = history.t[idx-1], t1 = history.t[idx];
+      const w = (tTick - t0) / (t1 - t0 || 1);
+      simA = history.A[idx-1] * (1-w) + history.A[idx] * w;
+      simB = history.B[idx-1] * (1-w) + history.B[idx] * w;
+    }
+    const rA = simA - realData.N[i];
+    sum += rA*rA; count++;
+    if (realData.P && realData.P[i] != null) {
+      const rB = simB - realData.P[i];
+      sum += rB*rB; count++;
+    }
+  }
+  return count > 0 ? Math.sqrt(sum / count) : null;
+}
+
+// ====== Holling: gestión de experimento ======
+function startExperiment() {
+  initSim();
+  hollingState.experimentRunning = true;
+  hollingState.startTick = 0;
+  ticksPerFrame = 4;
+  document.getElementById('speedSlider').value = 4;
+  play();
+}
+
+function finishExperiment() {
+  pause();
+  hollingState.experimentRunning = false;
+  const ne = hollingState.events.filter(e=>e.type==='encounter').length;
+  const na = hollingState.events.filter(e=>e.type==='attack').length;
+  const nc = hollingState.events.filter(e=>e.type==='capture').length;
+  const remaining = agents.filter(a=>a.species==='A' && a.alive).length;
+
+  // determinar replicate index para este N0
+  const replicate = hollingState.results.filter(r => r.N0 === P.N0).length + 1;
+
+  hollingState.results.push({
+    N0: P.N0,
+    duration: P.duration,
+    encounters: ne,
+    attacks: na,
+    captures: nc,
+    prey_remaining: remaining,
+    replicate
+  });
+
+  renderResultsTable();
+  drawFRPlot();
+}
+
+function abortExperiment() {
+  pause();
+  hollingState.experimentRunning = false;
+}
+
+function clearResults() {
+  if (!confirm('¿Borrar todos los resultados acumulados?')) return;
+  hollingState.results = [];
+  renderResultsTable();
+  drawFRPlot();
+}
+
+function deleteResult(idx) {
+  hollingState.results.splice(idx, 1);
+  renderResultsTable();
+  drawFRPlot();
+}
+
+function renderResultsTable() {
+  const tbody = document.getElementById('resultsTableBody');
+  if (!tbody) return;
+  if (hollingState.results.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);font-style:italic">Sin corridas aún</td></tr>';
+    return;
+  }
+  tbody.innerHTML = hollingState.results.map((r, i) => `
+    <tr>
+      <td>${r.N0}<sub>·${r.replicate}</sub></td>
+      <td>${r.encounters}</td>
+      <td>${r.attacks}</td>
+      <td>${r.captures}</td>
+      <td>${r.prey_remaining}</td>
+      <td>${r.encounters > 0 ? (r.attacks/r.encounters*100).toFixed(0) + '%' : '—'}</td>
+      <td><button class="ctl-mini" onclick="deleteResult(${i})">×</button></td>
+    </tr>
+  `).join('');
+}
+
+function exportResults() {
+  if (hollingState.results.length === 0) {
+    alert('Sin corridas para exportar.');
+    return;
+  }
+  let csv = 'N0,duration_ticks,replicate,encounters,attacks,captures,prey_remaining,attack_rate_pct,capture_rate_pct\n';
+  for (const r of hollingState.results) {
+    const ar = r.encounters > 0 ? (r.attacks / r.encounters * 100).toFixed(1) : '';
+    const cr = r.attacks > 0 ? (r.captures / r.attacks * 100).toFixed(1) : '';
+    csv += `${r.N0},${r.duration},${r.replicate},${r.encounters},${r.attacks},${r.captures},${r.prey_remaining},${ar},${cr}\n`;
+  }
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'fishlab_holling_results.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ===== Lab data form: entrada manual estructurada (Tabla 2 UJTL) =====
+function renderLabForm() {
+  const form = document.getElementById('labForm');
+  if (!form) return;
+  const trs = hollingState.labData.treatments;
+  if (trs.length === 0) {
+    form.innerHTML = '<div style="color:var(--muted);font-size:10.5px;text-align:center;padding:10px;font-style:italic">Sin tratamientos. Agrega uno abajo.</div>';
+    return;
+  }
+  form.innerHTML = trs.map((tr, ti) => `
+    <div class="lab-treatment" data-tr="${ti}">
+      <div class="lab-tr-header">
+        <strong>Tratamiento · N₀ = <input type="number" class="lab-input wide" value="${tr.N0}" min="1" max="200" data-tr-edit="${ti}" style="margin-left:4px"></strong>
+        <div>
+          <button class="lab-add-rep" onclick="addReplica(${ti})">+ rep</button>
+          <button class="lab-del-tr" onclick="removeTreatment(${ti})" title="Eliminar tratamiento">×</button>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th title="N° encuentros">Enc</th>
+            <th title="N° ataques">Att</th>
+            <th title="N° capturas">Cap</th>
+            <th title="Presas vivas remanentes (con depredador)">Rem</th>
+            <th title="Tiempo (s) hasta primer ataque">t₁ₐ</th>
+            <th title="Muertes en pecera control (sin depredador)">Ctrl</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tr.replicas.map((rep, ri) => `
+            <tr>
+              <td class="r-label">R${ri+1}</td>
+              <td><input class="lab-input" type="number" min="0" data-tr="${ti}" data-rep="${ri}" data-field="enc" value="${rep.enc ?? ''}"></td>
+              <td><input class="lab-input" type="number" min="0" data-tr="${ti}" data-rep="${ri}" data-field="att" value="${rep.att ?? ''}"></td>
+              <td><input class="lab-input" type="number" min="0" data-tr="${ti}" data-rep="${ri}" data-field="cap" value="${rep.cap ?? ''}"></td>
+              <td><input class="lab-input" type="number" min="0" data-tr="${ti}" data-rep="${ri}" data-field="rem" value="${rep.rem ?? ''}"></td>
+              <td><input class="lab-input wide" type="number" min="0" step="0.1" data-tr="${ti}" data-rep="${ri}" data-field="t1att" value="${rep.t1att ?? ''}"></td>
+              <td><input class="lab-input" type="number" min="0" data-tr="${ti}" data-rep="${ri}" data-field="ctrl" value="${rep.ctrl ?? ''}"></td>
+              <td><button class="lab-del-rep" onclick="removeReplica(${ti}, ${ri})" title="Eliminar réplica">×</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `).join('');
+
+  // wire inputs
+  form.querySelectorAll('input.lab-input[data-field]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const ti = +e.target.dataset.tr;
+      const ri = +e.target.dataset.rep;
+      const field = e.target.dataset.field;
+      const v = e.target.value === '' ? null : +e.target.value;
+      hollingState.labData.treatments[ti].replicas[ri][field] = v;
+      renderLabSummary();
+      drawFRPlot();
+    });
+  });
+  form.querySelectorAll('input[data-tr-edit]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const ti = +e.target.dataset.trEdit;
+      const v = +e.target.value;
+      if (!isNaN(v) && v > 0) {
+        hollingState.labData.treatments[ti].N0 = v;
+        renderLabSummary();
+        drawFRPlot();
+      }
+    });
+  });
+}
+
+function addReplica(ti) {
+  hollingState.labData.treatments[ti].replicas.push(emptyReplica());
+  renderLabForm();
+  renderLabSummary();
+  drawFRPlot();
+}
+
+function removeReplica(ti, ri) {
+  const tr = hollingState.labData.treatments[ti];
+  if (tr.replicas.length <= 1) {
+    // último: solo limpia
+    tr.replicas[0] = emptyReplica();
+  } else {
+    tr.replicas.splice(ri, 1);
+  }
+  renderLabForm();
+  renderLabSummary();
+  drawFRPlot();
+}
+
+function addTreatment() {
+  // sugiere un N0 que no exista aún
+  const existing = hollingState.labData.treatments.map(t => t.N0);
+  let suggest = 30;
+  while (existing.includes(suggest)) suggest += 5;
+  hollingState.labData.treatments.push({ N0: suggest, replicas: [emptyReplica()] });
+  renderLabForm();
+  renderLabSummary();
+  drawFRPlot();
+}
+
+function removeTreatment(ti) {
+  if (!confirm(`¿Eliminar tratamiento N₀=${hollingState.labData.treatments[ti].N0}?`)) return;
+  hollingState.labData.treatments.splice(ti, 1);
+  renderLabForm();
+  renderLabSummary();
+  drawFRPlot();
+}
+
+function clearLabData() {
+  if (!confirm('¿Limpiar todos los datos del lab? (mantiene la estructura de tratamientos)')) return;
+  for (const tr of hollingState.labData.treatments) {
+    tr.replicas = [emptyReplica()];
+  }
+  renderLabForm();
+  renderLabSummary();
+  drawFRPlot();
+}
+
+// Calcula resumen por tratamiento (promedios + tasas siguiendo fórmulas UJTL)
+function computeLabSummary() {
+  const out = [];
+  for (const tr of hollingState.labData.treatments) {
+    // réplicas con al menos algunos datos
+    const valid = tr.replicas.filter(r => r.cap !== null || r.enc !== null || r.att !== null);
+    if (valid.length === 0) {
+      out.push({ N0: tr.N0, n: 0, mean_enc: null, mean_att: null, mean_cap: null,
+                 mean_rem: null, mean_ctrl: null, mean_t1att: null,
+                 pct_enc_per_t: null, pct_att_per_enc: null, pct_cap_per_att: null,
+                 predation_rate: null });
+      continue;
+    }
+    const mean = (key) => {
+      const vs = valid.map(r => r[key]).filter(v => v !== null && !isNaN(v));
+      return vs.length ? vs.reduce((s,v)=>s+v,0) / vs.length : null;
+    };
+    const me = mean('enc'), ma = mean('att'), mc = mean('cap');
+    const mr = mean('rem'), mctrl = mean('ctrl'), mt1 = mean('t1att');
+    // % encuentros = N°encuentros / tiempo hasta primer ataque * 100  (fórmula guía)
+    const pctEnc = (me !== null && mt1 !== null && mt1 > 0) ? (me / mt1 * 100) : null;
+    const pctAtt = (me !== null && ma !== null && me > 0) ? (ma / me * 100) : null;
+    const pctCap = (ma !== null && mc !== null && ma > 0) ? (mc / ma * 100) : null;
+    // tasa depredación = capturas / (N0 - muertes naturales)
+    const predRate = (mc !== null && mctrl !== null) ? (mc / Math.max(0.0001, tr.N0 - mctrl)) : (mc !== null ? (mc / tr.N0) : null);
+    out.push({
+      N0: tr.N0, n: valid.length,
+      mean_enc: me, mean_att: ma, mean_cap: mc,
+      mean_rem: mr, mean_ctrl: mctrl, mean_t1att: mt1,
+      pct_enc_per_t: pctEnc, pct_att_per_enc: pctAtt, pct_cap_per_att: pctCap,
+      predation_rate: predRate
+    });
+  }
+  return out;
+}
+
+function renderLabSummary() {
+  const tbody = document.getElementById('labSummaryBody');
+  if (!tbody) return;
+  const summary = computeLabSummary();
+  if (summary.every(s => s.n === 0)) {
+    tbody.innerHTML = '<tr class="empty"><td colspan="5">Sin datos registrados</td></tr>';
+    return;
+  }
+  tbody.innerHTML = summary.map(s => {
+    if (s.n === 0) return `<tr style="color:var(--muted)"><td>${s.N0}</td><td colspan="4" style="text-align:center;font-style:italic;font-size:10px">— sin datos —</td></tr>`;
+    const fmt = (v, dp=1) => v === null ? '—' : v.toFixed(dp);
+    return `<tr>
+      <td>${s.N0}<sub style="color:var(--muted)">·n=${s.n}</sub></td>
+      <td>${fmt(s.pct_enc_per_t, 1)}</td>
+      <td>${fmt(s.pct_att_per_enc, 0)}</td>
+      <td>${fmt(s.pct_cap_per_att, 0)}</td>
+      <td>${fmt(s.predation_rate, 2)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Para el plot FR: extrae puntos (N0, mean_cap) por cada réplica individual
+function getLabFRPoints() {
+  const pts = [];
+  for (const tr of hollingState.labData.treatments) {
+    for (const rep of tr.replicas) {
+      if (rep.cap !== null && !isNaN(rep.cap)) {
+        pts.push({ x: tr.N0, y: rep.cap });
+      }
+    }
+  }
+  return pts;
+}
+
+function exportLabCSV() {
+  const trs = hollingState.labData.treatments;
+  let csv = 'N0,replica,encounters,attacks,captures,prey_remaining,t_first_attack_s,control_natural_dead\n';
+  let any = false;
+  for (const tr of trs) {
+    for (let ri = 0; ri < tr.replicas.length; ri++) {
+      const r = tr.replicas[ri];
+      if (r.enc === null && r.att === null && r.cap === null && r.rem === null) continue;
+      any = true;
+      csv += `${tr.N0},${ri+1},${r.enc ?? ''},${r.att ?? ''},${r.cap ?? ''},${r.rem ?? ''},${r.t1att ?? ''},${r.ctrl ?? ''}\n`;
+    }
+  }
+  // resumen calculado
+  csv += '\n# Resumen (promedios por tratamiento)\n# pred_rate_primary = capturas / (N0 - control_dead)\n# pred_rate_soumare = ((N0 - control_dead) - prey_remaining) / (N0 - control_dead)\nN0,n_replicas,mean_enc,mean_att,mean_cap,mean_rem,mean_ctrl,pct_enc_per_t1att,pct_att_per_enc,pct_cap_per_att,pred_rate_primary,pred_rate_soumare\n';
+  for (const s of computeLabSummary()) {
+    if (s.n === 0) continue;
+    const f = (v, d=2) => v === null ? '' : v.toFixed(d);
+    // Soumare: ((N0 - ctrl) - rem) / (N0 - ctrl)
+    let soumare = '';
+    if (s.mean_rem !== null && s.mean_ctrl !== null) {
+      const denom = s.N0 - s.mean_ctrl;
+      if (denom > 0) soumare = ((denom - s.mean_rem) / denom).toFixed(3);
+    }
+    csv += `${s.N0},${s.n},${f(s.mean_enc)},${f(s.mean_att)},${f(s.mean_cap)},${f(s.mean_rem)},${f(s.mean_ctrl)},${f(s.pct_enc_per_t)},${f(s.pct_att_per_enc)},${f(s.pct_cap_per_att)},${f(s.predation_rate,3)},${soumare}\n`;
+  }
+  if (!any) {
+    alert('Sin datos del lab para exportar.');
+    return;
+  }
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'fishlab_lab_data.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ===== UI: param panel + right panel rendering por modo =====
+function renderParamPanel() {
+  const container = document.getElementById('paramPanelContent');
+  if (currentMode === 'predation') {
+    container.innerHTML = `
+      <div class="mode-note">Especie <strong>A</strong> (azul · presa) se reproduce sola; especie <strong>B</strong> (rojo · depredador) come presas para vivir y reproducirse.</div>
+      <h3>Mundo</h3>
+      <div class="params-grid">
+        ${paramRow('N0', 'N₀', 'presas iniciales', 0, 300, 5)}
+        ${paramRow('P0', 'P₀', 'depredadores iniciales', 0, 100, 1)}
+      </div>
+      <h3>Presa (sp.A)</h3>
+      <div class="params-grid">
+        ${paramRow('preyRepro', 'r', 'tasa reproducción', 0, 0.2, 0.005)}
+        ${paramRow('preySpd', 'v', 'velocidad', 0, 4, 0.1)}
+        <div class="param-full">${paramRow('K', 'K', 'capacidad de carga (0=∞)', 0, 1500, 20)}</div>
+      </div>
+      <h3>Depredador (sp.B)</h3>
+      <div class="params-grid">
+        ${paramRow('vision', '◉', 'visión', 0, 80, 2)}
+        ${paramRow('predSpd', 'v', 'velocidad', 0, 4, 0.1)}
+        ${paramRow('eatGain', 'E⁺', 'energía/presa', 1, 40, 1)}
+        ${paramRow('metab', 'E⁻', 'metabolismo', 0, 2, 0.05)}
+        ${paramRow('predRepro', 'ρ', 'prob. repro.', 0, 0.8, 0.02)}
+        ${paramRow('reproEnergy', 'E*', 'umbral repro.', 0, 100, 2)}
+      </div>
+      <h3>Refugio</h3>
+      <div class="params-grid">
+        ${paramRow('refugeN', 'N*', 'umbral presa', 0, 50, 1)}
+        ${paramRow('immigInterval', 'τ', 'cada n ticks', 0, 100, 5)}
+      </div>
+    `;
+  } else if (currentMode === 'competition') {
+    container.innerHTML = `
+      <div class="mode-note">Dos especies (<strong>A</strong> azul, <strong>B</strong> rojo) compiten por recursos. Sin depredación; afectación cruzada con coef. <em>α</em>.</div>
+      <h3>Población inicial</h3>
+      <div class="params-grid">
+        ${paramRow('N0_A', 'N₀ᴬ', 'sp.1 iniciales', 0, 200, 5)}
+        ${paramRow('N0_B', 'N₀ᴮ', 'sp.2 iniciales', 0, 200, 5)}
+      </div>
+      <h3>Especie 1 (A · azul)</h3>
+      <div class="params-grid">
+        ${paramRow('r_A', 'r₁', 'crecimiento', 0, 0.2, 0.005)}
+        ${paramRow('K_A', 'K₁', 'capacidad', 10, 800, 10)}
+        ${paramRow('alpha_AB', 'α₁₂', 'efecto sp.2→1', 0, 3, 0.05)}
+        ${paramRow('d_A', 'd₁', 'mortalidad', 0, 0.02, 0.0005)}
+        <div class="param-full">${paramRow('spd_A', 'v₁', 'velocidad', 0, 3, 0.1)}</div>
+      </div>
+      <h3>Especie 2 (B · rojo)</h3>
+      <div class="params-grid">
+        ${paramRow('r_B', 'r₂', 'crecimiento', 0, 0.2, 0.005)}
+        ${paramRow('K_B', 'K₂', 'capacidad', 10, 800, 10)}
+        ${paramRow('alpha_BA', 'α₂₁', 'efecto sp.1→2', 0, 3, 0.05)}
+        ${paramRow('d_B', 'd₂', 'mortalidad', 0, 0.02, 0.0005)}
+        <div class="param-full">${paramRow('spd_B', 'v₂', 'velocidad', 0, 3, 0.1)}</div>
+      </div>
+    `;
+  } else {
+    // holling
+    container.innerHTML = `
+      <div class="mode-note"><strong>Lab UJTL</strong>: 1 pez (Guppy) + N₀ Daphnias por 30 min. Mide encuentros, ataques, capturas para calcular respuesta funcional Holling Type II.</div>
+      <h3>Tratamiento actual</h3>
+      <div class="quick-N">
+        <button onclick="setN0(8)">8</button>
+        <button onclick="setN0(12)">12</button>
+        <button onclick="setN0(18)">18</button>
+        <button onclick="setN0(25)">25</button>
+      </div>
+      <div class="params-grid">
+        <div class="param-full">${paramRow('N0', 'N₀', 'presas (Daphnias) en este ensayo', 1, 60, 1)}</div>
+        <div class="param-full">${paramRow('duration', 'T', 'duración (ticks ≈ segundos)', 60, 3600, 60)}</div>
+      </div>
+      <h3>Comportamiento del pez</h3>
+      <div class="params-grid">
+        ${paramRow('encounterRadius', 'rₑ', 'radio detección (≈3cm)', 10, 120, 5)}
+        ${paramRow('attackRadius', 'rₐ', 'radio ataque', 4, 30, 1)}
+        ${paramRow('captureProb', 'pᶜ', 'prob. captura', 0.05, 1.0, 0.05)}
+        ${paramRow('handlingTime', 'Tₕ', 'tiempo manejo (ticks)', 5, 200, 5)}
+        ${paramRow('predSpd', 'vₚ', 'velocidad pez', 0.5, 4, 0.1)}
+        ${paramRow('preySpd', 'vₐ', 'velocidad daphnia', 0, 2, 0.1)}
+      </div>
+      <h3>Control / Sin depredador</h3>
+      <div class="params-grid">
+        <div class="param-full">${paramRow('naturalMortality', 'μ', 'mortalidad natural Daphnia', 0, 0.005, 0.0001)}</div>
+      </div>
+    `;
+  }
+  wireParams();
+  renderEquations();
+}
+
+function paramRow(key, greek, desc, min, max, step) {
+  const val = P[key];
+  return `
+    <div class="param">
+      <div class="param-row">
+        <span class="param-label"><span class="greek">${greek}</span><span class="desc">${desc}</span></span>
+        <input type="number" class="param-value" data-pkey="${key}" value="${val}" step="${step}" min="${min}">
+      </div>
+      <input type="range" data-pkey="${key}" min="${min}" max="${max}" step="${step}" value="${val}">
+    </div>
+  `;
+}
+
+function setN0(n) {
+  P.N0 = n;
+  const num = document.querySelector('input[type=number][data-pkey="N0"]');
+  const rng = document.querySelector('input[type=range][data-pkey="N0"]');
+  if (num) num.value = n;
+  if (rng) rng.value = n;
+}
+
+function wireParams() {
+  document.querySelectorAll('#paramPanelContent input[type=range]').forEach(rng => {
+    const key = rng.dataset.pkey;
+    const num = document.querySelector(`#paramPanelContent input[type=number][data-pkey="${key}"]`);
+    rng.addEventListener('input', () => {
+      P[key] = +rng.value;
+      num.value = rng.value;
+      renderEquations();
+    });
+    num.addEventListener('input', () => {
+      P[key] = +num.value;
+      rng.value = num.value;
+      renderEquations();
+    });
+  });
+}
+
+function renderEquations() {
+  const box = document.getElementById('eqBox');
+  const tag = document.getElementById('modelTag');
+  if (!tag) return;
+  // En modo holling, eqBox no existe (reemplazado por frPlotCanvas) — actualizamos solo tag
+  if (currentMode === 'predation') {
+    tag.innerHTML = '<span style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em">Presa logística &amp; depredador</span>';
+    if (box) box.innerHTML = `
+      <div><span class="eq-n">[1]</span>
+        dN/dt = <em class="p">${P.preyRepro.toFixed(3)}</em>·N·(1 − N/<em class="p">${P.K}</em>) − a·N·P
+      </div>
+      <div><span class="eq-n">[2]</span>
+        dP/dt = b·N·P − <em class="p">${P.metab.toFixed(3)}</em>·P
+      </div>
+    `;
+  } else if (currentMode === 'competition') {
+    tag.innerHTML = '<span style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.15em">Lotka–Volterra competencia</span>';
+    if (box) box.innerHTML = `
+      <div><span class="eq-n">[1]</span>
+        dN₁/dt = <em class="p">${P.r_A.toFixed(3)}</em>·N₁·(1 − (N₁ + <em class="p">${P.alpha_AB.toFixed(2)}</em>·N₂)/<em class="p">${P.K_A}</em>)
+      </div>
+      <div><span class="eq-n">[2]</span>
+        dN₂/dt = <em class="p">${P.r_B.toFixed(3)}</em>·N₂·(1 − (N₂ + <em class="p">${P.alpha_BA.toFixed(2)}</em>·N₁)/<em class="p">${P.K_B}</em>)
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:6px">
+        Coexistencia ⟺ α₁₂ &lt; K₁/K₂ &amp; α₂₁ &lt; K₂/K₁
+      </div>
+    `;
+  } else {
+    tag.innerHTML = `
+      <span class="legend-item"><span class="legend-dot" style="background:var(--accent)"></span>Sim.</span>
+      <span class="legend-item"><span class="legend-tri"></span>Lab</span>
+      <span class="legend-item" style="font-family:var(--mono);font-size:9.5px;color:var(--muted)">— ajuste Type II</span>
+    `;
+    if (box) box.innerHTML = `
+      <div><span class="eq-n">[disk]</span>
+        Nₐ = <em class="p">a</em>·T·N₀ / (1 + <em class="p">a</em>·<em class="p">Tₕ</em>·N₀)
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:6px;line-height:1.6">
+        a = tasa de ataque (encuentros·tiempo⁻¹·presa⁻¹)<br>
+        Tₕ = tiempo de manejo por presa<br>
+        Asíntota: Nₐ → T/Tₕ cuando N₀ → ∞ (tasa máx 1/Tₕ)
+      </div>
+    `;
+  }
+}
+
+function renderRightPanel() {
+  const c = document.getElementById('rightPanelContent');
+  if (currentMode === 'holling') {
+    c.innerHTML = `
+      <h3>Experimento</h3>
+      <div class="btn-row">
+        <button class="ctl" id="btnRunExp">▶ Iniciar ensayo</button>
+        <button class="ctl alt" id="btnAbort">Abortar</button>
+      </div>
+      <div class="progress"><div id="expProgress"></div></div>
+
+      <h3>Bitácora de eventos</h3>
+      <div class="event-log" id="eventLog">
+        <div style="color:var(--muted);text-align:center;font-style:italic">Inicia un ensayo para registrar eventos</div>
+      </div>
+
+      <h3>Resultados acumulados</h3>
+      <div style="overflow-x:auto">
+        <table class="results-table">
+          <thead><tr><th>N₀</th><th>Enc</th><th>Att</th><th>Cap</th><th>Rem</th><th>%A/E</th><th></th></tr></thead>
+          <tbody id="resultsTableBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="ctl alt" id="btnExportRes">↓ CSV resultados</button>
+        <button class="ctl red" id="btnClearRes">Borrar</button>
+      </div>
+
+      <h3>Datos del lab <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· entrada manual</span></h3>
+      <div class="lab-help">
+        Registra aquí los valores de tu <b>Tabla 2</b> (UJTL). Cada tratamiento permite múltiples réplicas. Los promedios alimentan automáticamente el ajuste Holling.
+      </div>
+      <div class="lab-form" id="labForm"></div>
+      <button class="lab-add-tr" onclick="addTreatment()">+ agregar tratamiento</button>
+
+      <h3>Resumen calculado <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· promedios</span></h3>
+      <div style="overflow-x:auto">
+        <table class="lab-summary">
+          <thead>
+            <tr>
+              <th>N₀</th>
+              <th title="N° encuentros / tiempo hasta 1er ataque">%E/t</th>
+              <th title="Ataques / Encuentros">%A/E</th>
+              <th title="Capturas / Ataques">%C/A</th>
+              <th title="Capturas / (N0 - mortalidad natural)">τ pred</th>
+            </tr>
+          </thead>
+          <tbody id="labSummaryBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="ctl alt" id="btnExportLab">↓ CSV lab</button>
+        <button class="ctl alt" id="btnClearLab">Limpiar</button>
+      </div>
+
+      <h3>Ajuste Holling II</h3>
+      <div class="fit-result" id="fitParamsBox">
+        <div style="color:var(--muted);text-align:center;font-size:10.5px">Necesitas ≥ 2 réplicas o corridas</div>
+      </div>
+    `;
+    // wire up
+    document.getElementById('btnRunExp').onclick = startExperiment;
+    document.getElementById('btnAbort').onclick = abortExperiment;
+    document.getElementById('btnExportRes').onclick = exportResults;
+    document.getElementById('btnClearRes').onclick = clearResults;
+    document.getElementById('btnExportLab').onclick = exportLabCSV;
+    document.getElementById('btnClearLab').onclick = clearLabData;
+    renderResultsTable();
+    renderLabForm();
+    renderLabSummary();
+  } else {
+    c.innerHTML = `
+      <h3>Datos reales</h3>
+      <label class="file-drop" id="fileDrop">
+        <input type="file" id="fileInput" accept=".csv,text/csv">
+        Arrastra tu <strong>CSV</strong><br>
+        <span style="font-size:9.5px">o haz clic para seleccionar</span>
+      </label>
+      <div class="data-status" id="dataStatus">Sin datos cargados</div>
+
+      <details>
+        <summary>Formato CSV</summary>
+        <p>Columnas: <code>t</code>, <code>N</code> (sp.1 o presa), <code>P</code> (sp.2, opcional). Sep: <code>,</code> o <code>;</code>.</p>
+        <pre>t,N,P
+0,80,15
+5,95,22
+10,110,28</pre>
+      </details>
+
+      <div class="param" style="margin-top:14px">
+        <div class="param-row">
+          <span class="param-label">Tiempo por tick <span class="desc">Δt físico</span></span>
+          <input type="number" class="param-value" id="p_tScale" value="${tScale}" step="0.05" min="0.01">
+        </div>
+        <input type="range" id="s_tScale" min="0.01" max="1" step="0.01" value="${tScale}">
+      </div>
+
+      <div class="btn-row">
+        <button class="ctl alt" id="btnExport">↓ Exportar CSV</button>
+      </div>
+
+      <h3>Métricas</h3>
+      <div class="metrics" id="metricsBox"></div>
+    `;
+    document.getElementById('btnExport').onclick = exportCSV;
+    setupTScaleControls();
+    setupFileDrop();
+  }
+}
+
+function renderControlGroup() {
+  const c = document.getElementById('ctlGroup');
+  if (currentMode === 'holling') {
+    c.innerHTML = `
+      <button class="ctl" id="btnPlay">▶ Iniciar</button>
+      <button class="ctl alt" id="btnStep">Paso</button>
+      <button class="ctl red" id="btnReset">↺ Reset</button>
+    `;
+  } else {
+    c.innerHTML = `
+      <button class="ctl" id="btnPlay">▶ Iniciar</button>
+      <button class="ctl alt" id="btnStep">Paso</button>
+      <button class="ctl red" id="btnReset">↺ Reset</button>
+    `;
+  }
+  document.getElementById('btnPlay').onclick = togglePlay;
+  document.getElementById('btnStep').onclick = () => { if (!running) { stepOnce(); drawWorld(); drawPlot(); } };
+  document.getElementById('btnReset').onclick = reset;
+}
+
+function renderPlotLegend() {
+  const leg = document.getElementById('plotLegend');
+  if (currentMode === 'holling') {
+    leg.innerHTML = `
+      <span class="legend-item"><span class="legend-box" style="background:#e8c547"></span>Encuentros</span>
+      <span class="legend-item"><span class="legend-box" style="background:#d97a3a"></span>Ataques</span>
+      <span class="legend-item"><span class="legend-box" style="background:var(--sp2)"></span>Capturas</span>
+    `;
+    document.getElementById('plot1Title').innerHTML = 'Eventos <em>acumulados</em> · este ensayo';
+    document.getElementById('plot2Title').innerHTML = 'Respuesta <em>funcional</em>';
+    // reemplazar plot2 contenido con canvas FR
+    document.getElementById('plot2Body').innerHTML = '<canvas id="frPlotCanvas"></canvas>';
+    frPlotCanvas = document.getElementById('frPlotCanvas');
+    frPlotCtx = frPlotCanvas.getContext('2d');
+    resizeCanvases();
+    setTimeout(drawFRPlot, 50);
+  } else {
+    const labelA = currentMode === 'predation' ? 'Presa' : 'Sp.1';
+    const labelB = currentMode === 'predation' ? 'Depredador' : 'Sp.2';
+    leg.innerHTML = `
+      <span class="legend-item"><span class="legend-box" style="background:var(--sp1)"></span>${labelA}</span>
+      <span class="legend-item"><span class="legend-box" style="background:var(--sp2)"></span>${labelB}</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--data)"></span>Dato ${labelA}</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--data2);transform:rotate(45deg)"></span>Dato ${labelB}</span>
+    `;
+    document.getElementById('plot1Title').innerHTML = 'Series de <em>población</em>';
+    document.getElementById('plot2Title').innerHTML = 'Modelo <em>teórico</em> (ODE)';
+    document.getElementById('plot2Body').innerHTML = '<div class="eq-box" id="eqBox"></div>';
+    frPlotCanvas = null; frPlotCtx = null;
+  }
+  // refresca contenido de box/tag después de re-crear el DOM
+  renderEquations();
+}
+
+function loop() {
+  if (!running) return;
+  for (let i = 0; i < ticksPerFrame; i++) {
+    stepOnce();
+    if (!running) break;
+  }
+  drawWorld();
+  drawPlot();
+  if (currentMode === 'holling') drawFRPlot();
+  rafId = requestAnimationFrame(loop);
+}
+function play() {
+  if (agents.length === 0) initSim();
+  running = true;
+  const btn = document.getElementById('btnPlay');
+  if (btn) btn.textContent = '❚❚ Pausa';
+  loop();
+}
+function pause() {
+  running = false;
+  const btn = document.getElementById('btnPlay');
+  if (btn) btn.textContent = '▶ Iniciar';
+  if (rafId) cancelAnimationFrame(rafId);
+}
+function togglePlay() { running ? pause() : play(); }
+
+function reset() {
+  pause();
+  hollingState.experimentRunning = false;
+  initSim();
+  drawWorld();
+  drawPlot();
+  if (currentMode === 'holling') drawFRPlot();
+  updateStatsUI();
+}
+
+// ===== CSV (LV o Holling) =====
+function parseCSV_LV(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim().length);
+  if (!lines.length) throw new Error('CSV vacío');
+  const sep = lines[0].includes(';') ? ';' : ',';
+  const header = lines[0].split(sep).map(s => s.trim().toLowerCase().replace(/"/g,''));
+  const iT = header.findIndex(h => ['t','tiempo','time','semana','dia','día','mes'].includes(h));
+  const iN = header.findIndex(h => ['n','n1','presa','prey','sp1','n_1','especie1','fish1','peces1'].includes(h));
+  const iP = header.findIndex(h => ['p','n2','depredador','predator','sp2','n_2','especie2','fish2','peces2'].includes(h));
+  if (iT < 0 || iN < 0) throw new Error('Faltan columnas t y N');
+  const t=[], N=[], Pa = iP >= 0 ? [] : null;
+  for (let k=1; k<lines.length; k++) {
+    const raw = lines[k].split(sep).map(s => s.trim().replace(/"/g,''));
+    const parts = sep === ';' ? raw.map(s => s.replace(',', '.')) : raw;
+    const tv = parseFloat(parts[iT]);
+    const nv = parseFloat(parts[iN]);
+    if (isNaN(tv) || isNaN(nv)) continue;
+    t.push(tv); N.push(nv);
+    if (Pa) {
+      const pv = parseFloat(parts[iP]);
+      Pa.push(isNaN(pv) ? null : pv);
+    }
+  }
+  if (t.length === 0) throw new Error('No se pudieron leer filas numéricas');
+  return { t, N, P: Pa };
+}
+
+function parseCSV_Holling(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim().length);
+  if (!lines.length) throw new Error('CSV vacío');
+  const sep = lines[0].includes(';') ? ';' : ',';
+  const header = lines[0].split(sep).map(s => s.trim().toLowerCase().replace(/"/g,''));
+  const iN0  = header.findIndex(h => ['n0','n_0','presas','prey','offered'].includes(h));
+  const iEnc = header.findIndex(h => ['encounters','encuentros','enc'].includes(h));
+  const iAtt = header.findIndex(h => ['attacks','ataques','att'].includes(h));
+  const iCap = header.findIndex(h => ['captures','capturas','cap','consumed','eaten','na'].includes(h));
+  if (iN0 < 0 || iCap < 0) throw new Error('Necesitas columnas N0 y captures (capturas)');
+  const out = [];
+  for (let k=1; k<lines.length; k++) {
+    const raw = lines[k].split(sep).map(s => s.trim().replace(/"/g,''));
+    const parts = sep === ';' ? raw.map(s => s.replace(',', '.')) : raw;
+    const N0 = parseFloat(parts[iN0]);
+    const captures = parseFloat(parts[iCap]);
+    if (isNaN(N0) || isNaN(captures)) continue;
+    out.push({
+      N0,
+      encounters: iEnc >= 0 ? parseFloat(parts[iEnc]) || 0 : 0,
+      attacks: iAtt >= 0 ? parseFloat(parts[iAtt]) || 0 : 0,
+      captures
+    });
+  }
+  if (out.length === 0) throw new Error('Sin filas válidas');
+  return out;
+}
+
+function loadCSV(file) {
+  const reader = new FileReader();
+  const status = document.getElementById('dataStatus');
+  reader.onload = e => {
+    try {
+      // CSV solo se usa en modos LV ahora; holling tiene formulario manual
+      const parsed = parseCSV_LV(e.target.result);
+      realData = parsed;
+      if (status) {
+        status.textContent = `✓ ${parsed.t.length} pts · t∈[${parsed.t[0]}, ${parsed.t[parsed.t.length-1]}]` + (parsed.P ? ' · 2 series' : ' · 1 serie');
+        status.className = 'data-status ok';
+      }
+      drawPlot();
+      updateStatsUI();
+    } catch (err) {
+      if (status) {
+        status.textContent = '✗ ' + err.message;
+        status.className = 'data-status err';
+      }
+    }
+  };
+  reader.readAsText(file);
+}
+
+function exportCSV() {
+  const header = currentMode === 'predation' ? 'tick,time,prey,predator\n' : 'tick,time,species1,species2\n';
+  let csv = header;
+  for (let i=0; i<history.t.length; i++) {
+    csv += `${history.t[i]},${(history.t[i]*tScale).toFixed(4)},${history.A[i]},${history.B[i]}\n`;
+  }
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `fishlab_${currentMode}_sim.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function setupFileDrop() {
+  const fileDrop = document.getElementById('fileDrop');
+  const fileInput = document.getElementById('fileInput');
+  if (!fileDrop || !fileInput) return;
+  fileDrop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) loadCSV(e.target.files[0]); });
+  ['dragover','dragenter'].forEach(ev => fileDrop.addEventListener(ev, e => {
+    e.preventDefault(); fileDrop.classList.add('drag');
+  }));
+  ['dragleave','drop'].forEach(ev => fileDrop.addEventListener(ev, e => {
+    e.preventDefault(); fileDrop.classList.remove('drag');
+  }));
+  fileDrop.addEventListener('drop', e => {
+    e.preventDefault();
+    if (e.dataTransfer.files[0]) loadCSV(e.dataTransfer.files[0]);
+  });
+}
+
+function setupTScaleControls() {
+  const sl = document.getElementById('s_tScale');
+  const num = document.getElementById('p_tScale');
+  if (!sl || !num) return;
+  sl.addEventListener('input', () => {
+    tScale = +sl.value;
+    num.value = tScale;
+    drawPlot();
+    updateStatsUI();
+  });
+  num.addEventListener('input', () => {
+    tScale = +num.value;
+    sl.value = tScale;
+    drawPlot();
+    updateStatsUI();
+  });
+}
+
+function switchMode(mode) {
+  if (mode === currentMode) return;
+  pause();
+  currentMode = mode;
+  P = modeParams[mode];
+  realData = null;
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  renderParamPanel();
+  renderRightPanel();
+  renderControlGroup();
+  renderPlotLegend();
+  initSim();
+  drawWorld();
+  drawPlot();
+  if (currentMode === 'holling') drawFRPlot();
+  updateStatsUI();
+}
+
+// ===== Wire up initial =====
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+});
+document.getElementById('speedSlider').addEventListener('input', e => {
+  ticksPerFrame = +e.target.value;
+});
+
+window.addEventListener('resize', () => {
+  resizeCanvases();
+  drawWorld();
+  drawPlot();
+  if (currentMode === 'holling') drawFRPlot();
+});
+
+// init
+resizeCanvases();
+renderParamPanel();
+renderRightPanel();
+renderControlGroup();
+renderPlotLegend();
+initSim();
+drawWorld();
+drawPlot();
+updateStatsUI();
+
+// expose for inline onclick
+window.setN0 = setN0;
+window.deleteResult = deleteResult;
+window.addReplica = addReplica;
+window.removeReplica = removeReplica;
+window.addTreatment = addTreatment;
+window.removeTreatment = removeTreatment;
+</script>
+</body>
+</html>
