@@ -966,21 +966,23 @@
     border: 1px solid var(--border);
     border-radius: 3px;
     overflow: hidden;
+    max-width: 820px;
+    margin: 0 auto;
+    width: 100%;
   }
-  /* Sub-tabs: barra de navegación a todo lo ancho */
+  /* Sub-tabs: barra de navegación dentro del contenedor */
   .holling-bottom .holling-subtabs {
     margin-bottom: 0;
     border: none;
     border-bottom: 1.5px solid var(--border);
     border-radius: 0;
   }
-  /* Contenido del sub-tab: limitado a 720px centrado para lectura cómoda */
+  /* Contenido del sub-tab: padding generoso para lectura cómoda */
   .holling-bottom #hollingSubtabContent {
-    max-width: 720px;
-    margin: 0 auto;
     padding: 22px 26px 26px 26px;
   }
-  @media (max-width: 760px) {
+  @media (max-width: 860px) {
+    .holling-bottom { max-width: 100%; }
     .holling-bottom #hollingSubtabContent {
       padding: 16px;
     }
