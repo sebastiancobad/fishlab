@@ -1442,6 +1442,76 @@
   }
   .dataset-loaded b { color: var(--accent); }
 
+  /* ======== Vista "Otros grupos del curso" en sub-tab Comparar ======== */
+  .course-groups-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .course-group-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 3px;
+    padding: 12px 14px;
+  }
+  .course-group-card h4 {
+    margin: 0 0 4px 0;
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .course-group-card .members {
+    font-family: var(--serif);
+    font-size: 10.5px;
+    color: var(--muted);
+    margin: 0 0 8px 0;
+    line-height: 1.4;
+    font-style: italic;
+  }
+  .course-group-card .totals {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .course-group-card .totals b {
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .course-group-card .totals .reps {
+    margin-left: auto;
+    color: var(--muted);
+  }
+  .course-group-table {
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 10px;
+    border-collapse: collapse;
+  }
+  .course-group-table th, .course-group-table td {
+    padding: 3px 4px;
+    text-align: right;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .course-group-table th:first-child, .course-group-table td:first-child {
+    text-align: left;
+  }
+  .course-group-table th {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 9px;
+  }
+
   /* ======== Módulo de carga de datasets JSON ======== */
   .dataset-loader {
     border: 2px dashed var(--border);
@@ -6024,7 +6094,99 @@ function renderSubtabComparar() {
     </div>
   `;
 
+  // ===== Bloque "Otros grupos del curso" =====
+  const myDevice = getDeviceId();
+  const allReplicas = sync.allRemoteReplicas || [];
+  const otherGroupsReplicas = allReplicas.filter(r => r.ownerId !== myDevice);
+
+  // Agrupar por ownerId
+  const groupsByOwner = {};
+  for (const r of otherGroupsReplicas) {
+    if (r.cap === null && r.enc === null && r.att === null) continue;
+    if (!groupsByOwner[r.ownerId]) {
+      groupsByOwner[r.ownerId] = {
+        name: (r.group || '').trim() || '(sin nombre)',
+        members: r.members || '',
+        replicas: []
+      };
+    }
+    groupsByOwner[r.ownerId].replicas.push(r);
+  }
+  const otherGroups = Object.values(groupsByOwner).sort((a,b) => a.name.localeCompare(b.name));
+
+  let courseBlock = '';
+  if (sync.status !== 'connected') {
+    courseBlock = `
+      <h3>Otros grupos del curso <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· vista compartida</span></h3>
+      <p style="font-family:var(--serif);font-style:italic;font-size:12px;color:var(--muted);padding:16px;background:var(--bg);border-left:2px solid var(--border);margin-bottom:18px">
+        Conéctate a un curso desde sub-tab Registrar para ver los datos de otros grupos.
+      </p>
+    `;
+  } else if (otherGroups.length === 0) {
+    courseBlock = `
+      <h3>Otros grupos del curso <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· vista compartida</span></h3>
+      <p style="font-family:var(--serif);font-style:italic;font-size:12px;color:var(--muted);padding:16px;background:var(--bg);border-left:2px solid var(--border);margin-bottom:18px">
+        Aún no hay otros grupos con datos en este curso. Cuando registren, aparecerán aquí.
+      </p>
+    `;
+  } else {
+    const cardsHtml = otherGroups.map(g => {
+      const totalCap = g.replicas.reduce((s,r) => s + (r.cap || 0), 0);
+      const totalEnc = g.replicas.reduce((s,r) => s + (r.enc || 0), 0);
+      const totalAtt = g.replicas.reduce((s,r) => s + (r.att || 0), 0);
+
+      // Tabla por N0
+      const byN0 = {};
+      for (const r of g.replicas) {
+        if (!byN0[r.N0]) byN0[r.N0] = [];
+        byN0[r.N0].push(r);
+      }
+      const N0s = Object.keys(byN0).map(Number).sort((a,b) => a-b);
+      const trRows = N0s.map(N0 => {
+        const reps = byN0[N0];
+        const caps = reps.map(r => r.cap).filter(v => v !== null);
+        const meanCap = caps.length > 0
+          ? (caps.reduce((s,v) => s+v, 0) / caps.length).toFixed(1)
+          : '—';
+        return `<tr>
+          <td>${N0}</td>
+          <td>${reps.length}</td>
+          <td>${meanCap}</td>
+        </tr>`;
+      }).join('');
+
+      return `
+        <div class="course-group-card">
+          <h4>${escapeHtml(g.name)}</h4>
+          ${g.members ? `<p class="members">${escapeHtml(g.members)}</p>` : ''}
+          <div class="totals">
+            <span><b>${totalEnc}</b> enc</span>
+            <span><b>${totalAtt}</b> att</span>
+            <span><b>${totalCap}</b> cap</span>
+            <span class="reps">${g.replicas.length} réplica${g.replicas.length === 1 ? '' : 's'}</span>
+          </div>
+          <table class="course-group-table">
+            <thead><tr><th>N₀</th><th>n</th><th>cap (μ)</th></tr></thead>
+            <tbody>${trRows}</tbody>
+          </table>
+        </div>
+      `;
+    }).join('');
+
+    courseBlock = `
+      <h3>Otros grupos del curso <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· ${otherGroups.length} grupo${otherGroups.length===1?'':'s'} · vista compartida</span></h3>
+      <p style="font-family:var(--serif);font-size:12px;color:var(--ink-soft);line-height:1.5;margin-bottom:14px">
+        Tus datos NO aparecen aquí (esos están en Analizar). Aquí ves lo que han registrado los otros grupos del curso para que puedas comparar tus resultados con los suyos.
+      </p>
+      <div class="course-groups-grid">
+        ${cardsHtml}
+      </div>
+    `;
+  }
+
   return `
+    ${courseBlock}
+    <hr style="border:none;border-top:1.5px dashed var(--border);margin:22px 0">
     <h3>Datasets <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· comparación con literatura</span></h3>
     <p style="font-family:var(--serif);font-size:12px;color:var(--ink-soft);line-height:1.5;margin-bottom:14px">
       Carga datos extraídos de papers verificados (DOI/JSTOR) para superponer sobre tus datos del lab.
