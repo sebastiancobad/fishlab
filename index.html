@@ -1383,6 +1383,14 @@
   }
   .identity-pill:hover { background: var(--accent); color: var(--panel); }
   .identity-pill::before { content: "👥 "; }
+  /* Modo explorar: estilo gris, indica que falta registrarse */
+  .identity-pill.exploring {
+    background: var(--bg);
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+  .identity-pill.exploring:hover { background: var(--gold); color: var(--panel); }
+  .identity-pill.exploring::before { content: "✎ "; }
   .identity-pill .name {
     font-family: var(--serif);
     font-style: italic;
@@ -4711,6 +4719,9 @@ function renderResultsTable() {
       <td><button class="ctl-mini" onclick="deleteResult(${i})">×</button></td>
     </tr>
   `).join('');
+  // Actualizar también las gráficas de respuesta funcional (si existen en el DOM)
+  if (document.getElementById('simularFRCanvas')) drawSimularFR();
+  if (document.getElementById('simularRateCanvas')) drawSimularRate();
 }
 
 function exportResults() {
@@ -5798,7 +5809,11 @@ function wireSubtabEvents() {
     const cl = document.getElementById('btnClearRes');
     if (cl) cl.onclick = clearResults;
     renderResultsTable();
-    setTimeout(drawSimularPlot, 50);  // dejar que el canvas tenga tamaño antes de dibujar
+    setTimeout(() => {
+      drawSimularPlot();
+      drawSimularFR();
+      drawSimularRate();
+    }, 50);  // dejar que los canvas tengan tamaño antes de dibujar
   }
   else if (hollingSubtab === 'registrar') {
     renderSyncBanner();
@@ -5931,7 +5946,7 @@ function renderSubtabSimular() {
       </div>
       <div id="expStatus" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:6px"></div>
 
-      <h3 style="margin-top:14px">Eventos acumulados <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· vs tiempo</span></h3>
+      <h3 style="margin-top:14px">Eventos acumulados <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· vs tiempo · ensayo actual</span></h3>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:2px;padding:6px">
         <canvas id="simularPlotCanvas" style="width:100%;height:200px;display:block"></canvas>
       </div>
@@ -5939,6 +5954,22 @@ function renderSubtabSimular() {
         <span style="color:var(--accent)">━ encuentros</span>
         <span style="color:var(--gold)">━ ataques</span>
         <span style="color:var(--data)">━ capturas</span>
+      </div>
+
+      <h3 style="margin-top:14px">Respuesta funcional <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· capturas vs densidad de presas</span></h3>
+      <p style="font-family:var(--serif);font-size:11.5px;color:var(--ink-soft);line-height:1.4;margin:0 0 6px 0">
+        Cada punto es un ensayo. Identifica el patrón: <i>lineal-saturada</i> (Type I), <i>hiperbólica</i> (Type II) o <i>sigmoide</i> (Type III).
+      </p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:2px;padding:6px">
+        <canvas id="simularFRCanvas" style="width:100%;height:200px;display:block"></canvas>
+      </div>
+
+      <h3 style="margin-top:14px">Tasa de captura per cápita <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· capturas/N₀ vs N₀</span></h3>
+      <p style="font-family:var(--serif);font-size:11.5px;color:var(--ink-soft);line-height:1.4;margin:0 0 6px 0">
+        La proporción de presas consumidas. Patrón <i>decreciente</i> sugiere Type II, <i>jorobado</i> sugiere Type III.
+      </p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:2px;padding:6px">
+        <canvas id="simularRateCanvas" style="width:100%;height:200px;display:block"></canvas>
       </div>
 
       <h3 style="margin-top:14px">Eventos del ensayo en curso</h3>
@@ -6042,6 +6073,235 @@ function drawSimularPlot() {
   drawSerie(s => s.ne, cAccent);
   drawSerie(s => s.na, cGold);
   drawSerie(s => s.nc, cData);
+}
+
+// Gráfica de respuesta funcional: capturas vs N0 a partir de los ensayos virtuales realizados.
+// Cada punto = un ensayo. Permite identificar visualmente el tipo de respuesta funcional.
+function drawSimularFR() {
+  const c = document.getElementById('simularFRCanvas');
+  if (!c) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = c.getBoundingClientRect();
+  if (rect.width === 0) return;
+  c.width = rect.width * dpr;
+  c.height = rect.height * dpr;
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const w = rect.width, h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const padL = 42, padR = 12, padT = 10, padB = 28;
+  const pW = w - padL - padR;
+  const pH = h - padT - padB;
+
+  // Recolectar puntos de los ensayos virtuales (results)
+  const points = (hollingState.results || [])
+    .filter(r => typeof r.N0 === 'number' && typeof r.captures === 'number')
+    .map(r => ({ x: r.N0, y: r.captures }));
+
+  const cs = getComputedStyle(document.body);
+  const cBorder = cs.getPropertyValue('--border-soft').trim() || '#ddd';
+  const cMuted = cs.getPropertyValue('--muted').trim() || '#999';
+  const cInk = cs.getPropertyValue('--ink-soft').trim() || '#444';
+  const cData = cs.getPropertyValue('--data').trim() || '#7a9146';
+  const cAccent = cs.getPropertyValue('--accent').trim() || '#2d6b5e';
+
+  if (points.length === 0) {
+    ctx.fillStyle = cMuted;
+    ctx.font = 'italic 12px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Aún no hay ensayos virtuales completados', w/2, h/2);
+    return;
+  }
+
+  const maxX = Math.max(10, ...points.map(p => p.x)) * 1.1;
+  const maxY = Math.max(2, ...points.map(p => p.y)) * 1.15;
+
+  // Grid + ejes
+  ctx.strokeStyle = cBorder;
+  ctx.lineWidth = 1;
+  ctx.font = '9.5px monospace';
+  ctx.fillStyle = cMuted;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + pH * (1 - i/4);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + pW, y); ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.fillText((maxY * i/4).toFixed(0), padL - 5, y + 3);
+  }
+  for (let i = 0; i <= 5; i++) {
+    const x = padL + pW * i/5;
+    ctx.textAlign = 'center';
+    ctx.fillText((maxX * i/5).toFixed(0), x, padT + pH + 14);
+  }
+  // Etiquetas de ejes
+  ctx.fillStyle = cInk;
+  ctx.font = '10.5px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('N₀ (densidad inicial de presas)', padL + pW/2, padT + pH + 24);
+  ctx.save();
+  ctx.translate(12, padT + pH/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText('Capturas', 0, 0);
+  ctx.restore();
+
+  // Promediar por N0 para curva
+  const byN0 = {};
+  for (const p of points) {
+    if (!byN0[p.x]) byN0[p.x] = [];
+    byN0[p.x].push(p.y);
+  }
+  const N0sSorted = Object.keys(byN0).map(Number).sort((a,b) => a-b);
+  const meanPoints = N0sSorted.map(n => ({
+    x: n,
+    y: byN0[n].reduce((s,v) => s+v, 0) / byN0[n].length
+  }));
+
+  // Línea conectando promedios
+  if (meanPoints.length >= 2) {
+    ctx.strokeStyle = cData;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    meanPoints.forEach((p, i) => {
+      const px = padL + (p.x / maxX) * pW;
+      const py = padT + pH * (1 - p.y / maxY);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  }
+
+  // Puntos individuales
+  ctx.fillStyle = cAccent;
+  for (const p of points) {
+    const px = padL + (p.x / maxX) * pW;
+    const py = padT + pH * (1 - p.y / maxY);
+    ctx.beginPath();
+    ctx.arc(px, py, 3.5, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Promedios destacados
+  ctx.fillStyle = cData;
+  ctx.strokeStyle = cs.getPropertyValue('--panel').trim() || '#fff';
+  ctx.lineWidth = 2;
+  for (const p of meanPoints) {
+    const px = padL + (p.x / maxX) * pW;
+    const py = padT + pH * (1 - p.y / maxY);
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+// Gráfica de tasa per cápita: capturas/N0 vs N0. Útil para distinguir Type II vs Type III.
+function drawSimularRate() {
+  const c = document.getElementById('simularRateCanvas');
+  if (!c) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = c.getBoundingClientRect();
+  if (rect.width === 0) return;
+  c.width = rect.width * dpr;
+  c.height = rect.height * dpr;
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const w = rect.width, h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const padL = 42, padR = 12, padT = 10, padB = 28;
+  const pW = w - padL - padR;
+  const pH = h - padT - padB;
+
+  const points = (hollingState.results || [])
+    .filter(r => typeof r.N0 === 'number' && typeof r.captures === 'number' && r.N0 > 0)
+    .map(r => ({ x: r.N0, y: r.captures / r.N0 }));
+
+  const cs = getComputedStyle(document.body);
+  const cBorder = cs.getPropertyValue('--border-soft').trim() || '#ddd';
+  const cMuted = cs.getPropertyValue('--muted').trim() || '#999';
+  const cInk = cs.getPropertyValue('--ink-soft').trim() || '#444';
+  const cGold = cs.getPropertyValue('--gold').trim() || '#c89b4a';
+  const cAccent = cs.getPropertyValue('--accent').trim() || '#2d6b5e';
+
+  if (points.length === 0) {
+    ctx.fillStyle = cMuted;
+    ctx.font = 'italic 12px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Aún no hay ensayos virtuales completados', w/2, h/2);
+    return;
+  }
+
+  const maxX = Math.max(10, ...points.map(p => p.x)) * 1.1;
+  const maxY = Math.max(0.1, ...points.map(p => p.y)) * 1.15;
+
+  ctx.strokeStyle = cBorder;
+  ctx.lineWidth = 1;
+  ctx.font = '9.5px monospace';
+  ctx.fillStyle = cMuted;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + pH * (1 - i/4);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + pW, y); ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.fillText((maxY * i/4).toFixed(2), padL - 5, y + 3);
+  }
+  for (let i = 0; i <= 5; i++) {
+    const x = padL + pW * i/5;
+    ctx.textAlign = 'center';
+    ctx.fillText((maxX * i/5).toFixed(0), x, padT + pH + 14);
+  }
+  ctx.fillStyle = cInk;
+  ctx.font = '10.5px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('N₀ (densidad inicial de presas)', padL + pW/2, padT + pH + 24);
+  ctx.save();
+  ctx.translate(12, padT + pH/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText('Capturas / N₀', 0, 0);
+  ctx.restore();
+
+  // Promedios y línea conectora
+  const byN0 = {};
+  for (const p of points) {
+    if (!byN0[p.x]) byN0[p.x] = [];
+    byN0[p.x].push(p.y);
+  }
+  const N0sSorted = Object.keys(byN0).map(Number).sort((a,b) => a-b);
+  const meanPoints = N0sSorted.map(n => ({
+    x: n,
+    y: byN0[n].reduce((s,v) => s+v, 0) / byN0[n].length
+  }));
+
+  if (meanPoints.length >= 2) {
+    ctx.strokeStyle = cGold;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    meanPoints.forEach((p, i) => {
+      const px = padL + (p.x / maxX) * pW;
+      const py = padT + pH * (1 - p.y / maxY);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  }
+
+  // Puntos
+  ctx.fillStyle = cAccent;
+  for (const p of points) {
+    const px = padL + (p.x / maxX) * pW;
+    const py = padT + pH * (1 - p.y / maxY);
+    ctx.beginPath();
+    ctx.arc(px, py, 3.5, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.fillStyle = cGold;
+  ctx.strokeStyle = cs.getPropertyValue('--panel').trim() || '#fff';
+  ctx.lineWidth = 2;
+  for (const p of meanPoints) {
+    const px = padL + (p.x / maxX) * pW;
+    const py = padT + pH * (1 - p.y / maxY);
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+  }
 }
 
 // ====== Sub-tab 2: REGISTRAR ======
@@ -6810,6 +7070,8 @@ function openTeacherPanel() {
   hollingState.teacherMode = true;
   document.getElementById('teacherPanel').classList.add('open');
   document.body.style.overflow = 'hidden';
+  // Guardar flag para persistir el estado al refrescar (durante esta sesión)
+  try { sessionStorage.setItem('fishlab-teacher-open', '1'); } catch (e) {}
   // Iniciar suscripción a la lista global de cursos
   subscribeCoursesIndexIfNeeded();
   renderTeacherPanel();
@@ -6819,6 +7081,7 @@ function closeTeacherPanel() {
   hollingState.teacherMode = false;
   document.getElementById('teacherPanel').classList.remove('open');
   document.body.style.overflow = '';
+  try { sessionStorage.removeItem('fishlab-teacher-open'); } catch (e) {}
   // Cancelar suscripción al cerrar (ahorra cuotas Firebase)
   unsubscribeCoursesIndex();
 }
@@ -8258,6 +8521,7 @@ function skipWelcome() {
   // Marca que el usuario explícitamente eligió explorar sin identidad
   try { localStorage.setItem('fishlab-skipped-welcome', '1'); } catch (e) {}
   closeWelcome();
+  renderIdentityPill();
 }
 
 function renderIdentityPill() {
@@ -8265,9 +8529,21 @@ function renderIdentityPill() {
   const name = document.getElementById('identityName');
   if (!pill || !name) return;
   const id = getIdentity();
+  let skipped = false;
+  try { skipped = localStorage.getItem('fishlab-skipped-welcome') === '1'; } catch (e) {}
   if (id && id.group) {
     pill.style.display = 'inline-flex';
+    pill.classList.remove('exploring');
     name.textContent = id.group;
+    const change = pill.querySelector('.change');
+    if (change) change.textContent = 'cambiar';
+  } else if (skipped) {
+    // Modo explorar: pill visible pero etiquetado distinto
+    pill.style.display = 'inline-flex';
+    pill.classList.add('exploring');
+    name.textContent = 'Explorando';
+    const change = pill.querySelector('.change');
+    if (change) change.textContent = 'registrarse';
   } else {
     pill.style.display = 'none';
   }
@@ -8311,6 +8587,14 @@ document.getElementById('teacherPw').addEventListener('keydown', e => {
 });
 document.getElementById('btnTeacherClose').onclick = closeTeacherPanel;
 document.getElementById('btnTeacherWipe').onclick = wipeCourseFromTeacher;
+
+// Restaurar panel docente si estaba abierto antes de refrescar (durante esta sesión)
+try {
+  if (sessionStorage.getItem('fishlab-teacher-open') === '1') {
+    // Esperar un tick para que todos los wire-ups y Firebase estén listos
+    setTimeout(() => openTeacherPanel(), 100);
+  }
+} catch (e) {}
 document.getElementById('loginModal').addEventListener('click', e => {
   if (e.target.id === 'loginModal') closeTeacherLogin();
 });
