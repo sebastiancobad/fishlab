@@ -4658,6 +4658,108 @@ function startExperiment() {
   play();
 }
 
+// ===== Barrido automático: corre múltiples N0 con varias réplicas en secuencia =====
+const sweepState = {
+  active: false,
+  queue: [],         // [{N0, replicate}]
+  currentIdx: 0,
+  totalRuns: 0
+};
+
+function startSweep() {
+  if (sweepState.active) return;
+  // Leer configuración del usuario
+  const n0sStr = document.getElementById('sweepN0s')?.value || '8,12,18,25';
+  const repsStr = document.getElementById('sweepReps')?.value || '3';
+  const speedStr = document.getElementById('sweepSpeed')?.value || '8';
+  const N0s = n0sStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 200);
+  const reps = parseInt(repsStr) || 3;
+  const speed = parseInt(speedStr) || 8;
+  if (N0s.length === 0) {
+    alert('Especifica al menos un N₀ válido (ej: 4,8,16,32)');
+    return;
+  }
+  if (reps < 1 || reps > 20) {
+    alert('Réplicas debe estar entre 1 y 20');
+    return;
+  }
+  // Construir cola: para cada N0, reps ensayos
+  const queue = [];
+  for (const n0 of N0s) {
+    for (let r = 0; r < reps; r++) queue.push({ N0: n0, replicate: r+1 });
+  }
+  sweepState.active = true;
+  sweepState.queue = queue;
+  sweepState.currentIdx = 0;
+  sweepState.totalRuns = queue.length;
+  ticksPerFrame = speed;
+  const slider = document.getElementById('speedSlider');
+  if (slider) slider.value = Math.min(speed, parseInt(slider.max) || 16);
+  runNextSweepIteration();
+}
+
+function runNextSweepIteration() {
+  if (!sweepState.active) return;
+  if (sweepState.currentIdx >= sweepState.queue.length) {
+    finishSweep();
+    return;
+  }
+  const job = sweepState.queue[sweepState.currentIdx];
+  // Ajustar N0 antes del initSim
+  P.N0 = job.N0;
+  // Iniciar ensayo
+  initSim();
+  hollingState.experimentRunning = true;
+  hollingState.startTick = 0;
+  updateSweepStatus();
+  play();
+}
+
+function finishSweep() {
+  sweepState.active = false;
+  sweepState.queue = [];
+  sweepState.currentIdx = 0;
+  ticksPerFrame = 4;
+  const slider = document.getElementById('speedSlider');
+  if (slider) slider.value = 4;
+  updateSweepStatus();
+  // Re-render y refit
+  renderResultsTable();
+  if (typeof refitSimularModels === 'function') refitSimularModels();
+}
+
+function abortSweep() {
+  sweepState.active = false;
+  sweepState.queue = [];
+  pause();
+  hollingState.experimentRunning = false;
+  ticksPerFrame = 4;
+  const slider = document.getElementById('speedSlider');
+  if (slider) slider.value = 4;
+  updateSweepStatus();
+}
+
+function updateSweepStatus() {
+  const el = document.getElementById('sweepStatus');
+  if (!el) return;
+  if (!sweepState.active) {
+    el.innerHTML = '';
+    return;
+  }
+  const done = sweepState.currentIdx;
+  const total = sweepState.totalRuns;
+  const pct = total > 0 ? (done / total * 100).toFixed(0) : 0;
+  const job = sweepState.queue[done];
+  el.innerHTML = `
+    <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);margin-bottom:4px">
+      Ensayo ${done+1}/${total} · N₀=${job ? job.N0 : '—'} · réplica ${job ? job.replicate : '—'}
+    </div>
+    <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:var(--accent);transition:width 0.3s"></div>
+    </div>
+  `;
+}
+
 function finishExperiment() {
   pause();
   hollingState.experimentRunning = false;
@@ -4681,6 +4783,12 @@ function finishExperiment() {
 
   renderResultsTable();
   drawFRPlot();
+
+  // Si hay barrido activo, encadenar el siguiente ensayo
+  if (sweepState.active) {
+    sweepState.currentIdx++;
+    setTimeout(runNextSweepIteration, 100);  // pequeña pausa para refresh visual
+  }
 }
 
 function abortExperiment() {
@@ -4722,6 +4830,8 @@ function renderResultsTable() {
   // Actualizar también las gráficas de respuesta funcional (si existen en el DOM)
   if (document.getElementById('simularFRCanvas')) drawSimularFR();
   if (document.getElementById('simularRateCanvas')) drawSimularRate();
+  // Reajustar modelos si la caja de fit existe
+  if (document.getElementById('simularFitBox')) refitSimularModels();
 }
 
 function exportResults() {
@@ -5808,11 +5918,18 @@ function wireSubtabEvents() {
     if (ex) ex.onclick = exportResults;
     const cl = document.getElementById('btnClearRes');
     if (cl) cl.onclick = clearResults;
+    const sweep = document.getElementById('btnRunSweep');
+    if (sweep) sweep.onclick = startSweep;
+    const sweepAb = document.getElementById('btnAbortSweep');
+    if (sweepAb) sweepAb.onclick = abortSweep;
+    const refit = document.getElementById('btnRefit');
+    if (refit) refit.onclick = refitSimularModels;
     renderResultsTable();
     setTimeout(() => {
       drawSimularPlot();
       drawSimularFR();
       drawSimularRate();
+      refitSimularModels();
     }, 50);  // dejar que los canvas tengan tamaño antes de dibujar
   }
   else if (hollingSubtab === 'registrar') {
@@ -5946,6 +6063,36 @@ function renderSubtabSimular() {
       </div>
       <div id="expStatus" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:6px"></div>
 
+      <details style="margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:3px">
+        <summary style="cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft)">
+          ⚡ Barrido automático <span style="text-transform:none;color:var(--muted);font-size:10px;font-family:var(--serif);font-style:italic">· corre múltiples ensayos en secuencia</span>
+        </summary>
+        <div style="padding:0 14px 14px 14px">
+          <p style="font-family:var(--serif);font-size:11.5px;color:var(--ink-soft);line-height:1.4;margin:0 0 8px 0">
+            Permite construir la curva de respuesta funcional rápidamente. Define los N₀ a probar y cuántas réplicas por nivel.
+          </p>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+            <label style="display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:10px;color:var(--muted)">
+              N₀ (separados por coma)
+              <input type="text" id="sweepN0s" value="4,8,16,25,40" style="padding:5px 8px;font-family:var(--mono);font-size:11px;border:1px solid var(--border);border-radius:2px;background:var(--panel)">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:10px;color:var(--muted)">
+              Réplicas por nivel
+              <input type="number" id="sweepReps" value="3" min="1" max="20" style="padding:5px 8px;font-family:var(--mono);font-size:11px;border:1px solid var(--border);border-radius:2px;background:var(--panel)">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:10px;color:var(--muted)">
+              Velocidad (ticks/frame)
+              <input type="number" id="sweepSpeed" value="8" min="1" max="32" style="padding:5px 8px;font-family:var(--mono);font-size:11px;border:1px solid var(--border);border-radius:2px;background:var(--panel)">
+            </label>
+          </div>
+          <div class="btn-row">
+            <button class="ctl" id="btnRunSweep">▶ Ejecutar barrido</button>
+            <button class="ctl alt" id="btnAbortSweep">Detener</button>
+          </div>
+          <div id="sweepStatus" style="margin-top:8px"></div>
+        </div>
+      </details>
+
       <h3 style="margin-top:14px">Eventos acumulados <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· vs tiempo · ensayo actual</span></h3>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:2px;padding:6px">
         <canvas id="simularPlotCanvas" style="width:100%;height:200px;display:block"></canvas>
@@ -5962,6 +6109,14 @@ function renderSubtabSimular() {
       </p>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:2px;padding:6px">
         <canvas id="simularFRCanvas" style="width:100%;height:200px;display:block"></canvas>
+      </div>
+
+      <div style="margin-top:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+          <h4 style="font-family:var(--serif);font-style:italic;font-size:13px;margin:0;color:var(--ink)">Ajuste de modelos Holling</h4>
+          <button class="ctl alt" id="btnRefit" style="font-size:10px;padding:3px 10px">↻ Reajustar</button>
+        </div>
+        <div id="simularFitBox"></div>
       </div>
 
       <h3 style="margin-top:14px">Tasa de captura per cápita <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· capturas/N₀ vs N₀</span></h3>
@@ -6191,6 +6346,53 @@ function drawSimularFR() {
     ctx.fill();
     ctx.stroke();
   }
+
+  // Superponer curvas teóricas si hay ajuste disponible
+  const fits = hollingState.simularFits;
+  if (fits) {
+    const T = (P && P.duration) || 1800;
+    // Funciones predictivas
+    const predictI   = (n) => fits.fI   ? fits.fI.a   * T * n : null;
+    const predictII  = (n) => fits.fII  ? (fits.fII.a  * T * n) / (1 + fits.fII.a  * fits.fII.Th  * n) : null;
+    const predictIII = (n) => fits.fIII ? (fits.fIII.a * T * n * n) / (1 + fits.fIII.a * fits.fIII.Th * n * n) : null;
+
+    function drawCurve(predFn, color, dashed) {
+      if (!predFn(1)) return;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      if (dashed) ctx.setLineDash([4, 3]); else ctx.setLineDash([]);
+      ctx.beginPath();
+      const steps = 100;
+      let started = false;
+      for (let i = 0; i <= steps; i++) {
+        const n = (maxX * i / steps);
+        const y = predFn(n);
+        if (y === null || !isFinite(y)) continue;
+        const px = padL + (n / maxX) * pW;
+        const py = padT + pH * (1 - Math.min(y, maxY) / maxY);
+        if (!started) { ctx.moveTo(px, py); started = true; }
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    const cInk = cs.getPropertyValue('--ink-soft').trim() || '#444';
+    const bestType = fits.best.type;
+    // Type I solo si es el mejor
+    if (bestType === 'I') drawCurve(predictI, cInk, false);
+    // II y III siempre punteadas, la mejor más visible
+    drawCurve(predictII, bestType === 'II' ? cInk : cMuted, bestType !== 'II');
+    drawCurve(predictIII, bestType === 'III' ? cInk : cMuted, bestType !== 'III');
+
+    // Leyenda discreta
+    ctx.font = '9px monospace';
+    ctx.fillStyle = cMuted;
+    ctx.textAlign = 'left';
+    const legY = padT + 12;
+    ctx.fillText('━ Type ' + bestType + ' (mejor)', padL + 8, legY);
+    ctx.fillText('┄ otros modelos', padL + 8, legY + 12);
+  }
 }
 
 // Gráfica de tasa per cápita: capturas/N0 vs N0. Útil para distinguir Type II vs Type III.
@@ -6304,7 +6506,69 @@ function drawSimularRate() {
   }
 }
 
-// ====== Sub-tab 2: REGISTRAR ======
+// Ajusta Holling I, II, III sobre los ensayos virtuales del ABM y muestra tabla AIC + curvas teóricas
+function refitSimularModels() {
+  const box = document.getElementById('simularFitBox');
+  if (!box) return;
+  const points = (hollingState.results || [])
+    .filter(r => typeof r.N0 === 'number' && typeof r.captures === 'number')
+    .map(r => ({ x: r.N0, y: r.captures }));
+
+  if (points.length < 3) {
+    box.innerHTML = `
+      <p style="font-family:var(--serif);font-style:italic;font-size:11.5px;color:var(--muted);margin:0;padding:8px 0">
+        Necesitas al menos 3 ensayos para ajustar modelos Holling I/II/III. Actualmente: ${points.length}.
+      </p>
+    `;
+    hollingState.simularFits = null;
+    drawSimularFR();
+    return;
+  }
+
+  const T = (P && P.duration) || 1800;
+  const fit = fitAllTypes(points, T);
+  if (!fit) {
+    box.innerHTML = `<p style="color:var(--muted)">No se pudo ajustar los modelos.</p>`;
+    return;
+  }
+  hollingState.simularFits = fit;
+
+  const rows = fit.all.map(f => {
+    const isBest = f.deltaAIC === 0;
+    return `<tr ${isBest ? 'style="background:rgba(122,145,70,0.10)"' : ''}>
+      <td>Type ${f.type}${isBest ? ' <span style="color:var(--data);font-size:9px">★ mejor</span>' : ''}</td>
+      <td style="text-align:right">${f.r2 !== null ? f.r2.toFixed(3) : '—'}</td>
+      <td style="text-align:right">${f.aic.toFixed(2)}</td>
+      <td style="text-align:right">${f.deltaAIC.toFixed(2)}</td>
+      <td style="text-align:right">${f.weight.toFixed(3)}</td>
+    </tr>`;
+  }).join('');
+
+  const best = fit.best;
+  const interp = best.weight > 0.7
+    ? `Evidencia <b style="color:var(--data)">fuerte</b> a favor de Type ${best.type}`
+    : best.weight > 0.5
+      ? `Evidencia <b style="color:var(--gold)">moderada</b> a favor de Type ${best.type}`
+      : `Evidencia <b>débil</b> · ΔAIC entre modelos &lt; 2 (modelos casi equivalentes)`;
+
+  box.innerHTML = `
+    <table class="course-group-table" style="width:100%;max-width:520px;margin-bottom:8px">
+      <thead><tr><th>Modelo</th><th style="text-align:right">R²</th><th style="text-align:right">AIC</th><th style="text-align:right">ΔAIC</th><th style="text-align:right">w</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="background:var(--bg);border-left:2px solid var(--gold);padding:8px 12px;font-family:var(--serif);font-size:11.5px;line-height:1.5;color:var(--ink-soft)">
+      ${interp}.<br>
+      Parámetros: <code>a = ${best.a.toExponential(3)}</code>${best.type !== 'I' ? `, <code>Tₕ = ${best.Th.toFixed(2)}</code>` : ''}.
+      ${best.type === 'I' ? '<br>El simulador se comporta como un depredador <i>lineal-saturado</i>.' : ''}
+      ${best.type === 'II' ? '<br>El simulador se comporta como un depredador <i>hiperbólico</i> (saturación gradual).' : ''}
+      ${best.type === 'III' ? '<br>El simulador se comporta como un depredador <i>sigmoide</i> (respuesta lenta a baja densidad).' : ''}
+    </div>
+  `;
+
+  drawSimularFR();
+}
+
+
 function renderSubtabRegistrar() {
   return `
     <h3>Datos del lab <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· entrada manual</span></h3>
