@@ -6184,8 +6184,213 @@ function renderSubtabComparar() {
     `;
   }
 
+  // ===== Bloque "Resumen mis datos" =====
+  // Mis réplicas: las remotas con mi ownerId + las locales no sincronizadas
+  const myRemoteReplicas = allReplicas.filter(r => r.ownerId === myDevice);
+  const myLocalReplicas = [];
+  for (const tr of hollingState.labData.treatments) {
+    for (const r of tr.replicas) {
+      if (isLocalId(r.id) && (r.cap !== null || r.enc !== null || r.att !== null)) {
+        myLocalReplicas.push({ ...r, N0: tr.N0 });
+      }
+    }
+  }
+  const myAllReplicas = [...myRemoteReplicas, ...myLocalReplicas];
+  let myDataBlock = '';
+  if (myAllReplicas.length === 0) {
+    myDataBlock = `
+      <h3>Resumen mis datos <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· grupo actual</span></h3>
+      <p style="font-family:var(--serif);font-style:italic;font-size:12px;color:var(--muted);padding:16px;background:var(--bg);border-left:2px solid var(--border);margin-bottom:18px">
+        Aún no has registrado réplicas. Ve a sub-tab Registrar para empezar.
+      </p>
+    `;
+  } else {
+    const myTotalEnc = myAllReplicas.reduce((s,r) => s + (r.enc || 0), 0);
+    const myTotalAtt = myAllReplicas.reduce((s,r) => s + (r.att || 0), 0);
+    const myTotalCap = myAllReplicas.reduce((s,r) => s + (r.cap || 0), 0);
+    // Tabla por N0
+    const myByN0 = {};
+    for (const r of myAllReplicas) {
+      if (!myByN0[r.N0]) myByN0[r.N0] = [];
+      myByN0[r.N0].push(r);
+    }
+    const myN0s = Object.keys(myByN0).map(Number).sort((a,b) => a-b);
+    const myTrRows = myN0s.map(N0 => {
+      const reps = myByN0[N0];
+      const caps = reps.map(r => r.cap).filter(v => v !== null);
+      const meanCap = caps.length > 0
+        ? (caps.reduce((s,v) => s+v, 0) / caps.length).toFixed(1)
+        : '—';
+      return `<tr>
+        <td>${N0}</td>
+        <td>${reps.length}</td>
+        <td>${meanCap}</td>
+      </tr>`;
+    }).join('');
+    myDataBlock = `
+      <h3>Resumen mis datos <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· grupo actual</span></h3>
+      <div class="course-group-card" style="border-left-color:var(--gold);max-width:340px">
+        <h4>Mi grupo</h4>
+        <div class="totals">
+          <span><b>${myTotalEnc}</b> enc</span>
+          <span><b>${myTotalAtt}</b> att</span>
+          <span><b>${myTotalCap}</b> cap</span>
+          <span class="reps">${myAllReplicas.length} réplica${myAllReplicas.length === 1 ? '' : 's'}</span>
+        </div>
+        <table class="course-group-table">
+          <thead><tr><th>N₀</th><th>n</th><th>cap (μ)</th></tr></thead>
+          <tbody>${myTrRows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // ===== Bloque "ANOVA grupal" =====
+  let anovaBlock = '';
+  if (sync.status === 'connected' && allReplicas.length > 0) {
+    // ANOVA entre N0 (todos los grupos juntos)
+    const allByN0 = {};
+    for (const r of allReplicas) {
+      if (r.cap === null) continue;
+      if (!allByN0[r.N0]) allByN0[r.N0] = [];
+      allByN0[r.N0].push(r.cap);
+    }
+    const groupsForAnovaN0 = Object.values(allByN0).filter(g => g.length > 0);
+    let anovaN0Html = '';
+    if (groupsForAnovaN0.length >= 2 && groupsForAnovaN0.reduce((s,g)=>s+g.length,0) > groupsForAnovaN0.length) {
+      const a = anovaOneWay(groupsForAnovaN0);
+      if (a) {
+        const sig = a.pValue < 0.05 ? '<b style="color:var(--data)">Sí</b>' : '<b style="color:var(--muted)">No</b>';
+        anovaN0Html = `
+          <div style="margin-bottom:14px">
+            <h4 style="font-family:var(--serif);font-style:italic;font-size:13px;margin:0 0 6px 0">¿La densidad N₀ afecta las capturas?</h4>
+            <p style="font-family:var(--serif);font-size:11.5px;color:var(--ink-soft);margin:0 0 8px 0">
+              ANOVA entre niveles de N₀, agregando capturas de todos los grupos del curso.
+            </p>
+            <table class="course-group-table" style="max-width:480px">
+              <tbody>
+                <tr><td>F (${a.dfBetween}, ${a.dfWithin})</td><td style="text-align:right">${a.F.toFixed(3)}</td></tr>
+                <tr><td>p-valor</td><td style="text-align:right">${a.pValue < 0.001 ? '< 0.001' : a.pValue.toFixed(4)}</td></tr>
+                <tr><td>n total</td><td style="text-align:right">${a.N}</td></tr>
+                <tr><td>Diferencia significativa (α=0.05)</td><td style="text-align:right">${sig}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+    } else {
+      anovaN0Html = `
+        <div style="margin-bottom:14px">
+          <h4 style="font-family:var(--serif);font-style:italic;font-size:13px;margin:0 0 6px 0">¿La densidad N₀ afecta las capturas?</h4>
+          <p style="font-family:var(--serif);font-style:italic;font-size:11.5px;color:var(--muted);padding:10px;background:var(--bg);border-left:2px solid var(--border);margin:0">
+            Necesitas ≥ 2 niveles de N₀ con datos del curso para ANOVA.
+          </p>
+        </div>
+      `;
+    }
+    // ANOVA entre grupos
+    const allByOwner = {};
+    for (const r of allReplicas) {
+      if (r.cap === null) continue;
+      const key = r.ownerId || '_unknown';
+      if (!allByOwner[key]) allByOwner[key] = [];
+      allByOwner[key].push(r.cap);
+    }
+    const groupsForAnovaGrp = Object.values(allByOwner).filter(g => g.length > 0);
+    let anovaGroupsHtml = '';
+    if (groupsForAnovaGrp.length >= 2 && groupsForAnovaGrp.reduce((s,g)=>s+g.length,0) > groupsForAnovaGrp.length) {
+      const a = anovaOneWay(groupsForAnovaGrp);
+      if (a) {
+        const sig = a.pValue < 0.05 ? '<b style="color:var(--data)">Sí</b>' : '<b style="color:var(--muted)">No</b>';
+        const interp = a.pValue < 0.05
+          ? '<i>Los grupos difieren entre sí.</i> Esto puede indicar variabilidad metodológica entre equipos (cómo contaron, cómo definieron evento, condiciones del pez).'
+          : '<i>Los grupos no difieren significativamente entre sí.</i> Sugiere que la metodología fue aplicada de forma consistente entre equipos.';
+        anovaGroupsHtml = `
+          <div style="margin-bottom:8px">
+            <h4 style="font-family:var(--serif);font-style:italic;font-size:13px;margin:0 0 6px 0">¿Los grupos difieren entre sí?</h4>
+            <p style="font-family:var(--serif);font-size:11.5px;color:var(--ink-soft);margin:0 0 8px 0">
+              ANOVA entre grupos, ignorando N₀. Sirve para detectar heterogeneidad metodológica.
+            </p>
+            <table class="course-group-table" style="max-width:480px">
+              <tbody>
+                <tr><td>F (${a.dfBetween}, ${a.dfWithin})</td><td style="text-align:right">${a.F.toFixed(3)}</td></tr>
+                <tr><td>p-valor</td><td style="text-align:right">${a.pValue < 0.001 ? '< 0.001' : a.pValue.toFixed(4)}</td></tr>
+                <tr><td>n total</td><td style="text-align:right">${a.N}</td></tr>
+                <tr><td>Diferencia significativa (α=0.05)</td><td style="text-align:right">${sig}</td></tr>
+              </tbody>
+            </table>
+            <p style="font-family:var(--serif);font-size:11px;color:var(--ink-soft);margin-top:6px">${interp}</p>
+          </div>
+        `;
+      }
+    } else {
+      anovaGroupsHtml = `
+        <div style="margin-bottom:8px">
+          <h4 style="font-family:var(--serif);font-style:italic;font-size:13px;margin:0 0 6px 0">¿Los grupos difieren entre sí?</h4>
+          <p style="font-family:var(--serif);font-style:italic;font-size:11.5px;color:var(--muted);padding:10px;background:var(--bg);border-left:2px solid var(--border);margin:0">
+            Necesitas ≥ 2 grupos con datos para ANOVA entre grupos.
+          </p>
+        </div>
+      `;
+    }
+    anovaBlock = `
+      <h3>ANOVA grupal <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· análisis con todo el curso</span></h3>
+      ${anovaN0Html}
+      ${anovaGroupsHtml}
+    `;
+  }
+
+  // ===== Bloque "Parámetros estimados grupales" =====
+  let paramsBlock = '';
+  if (sync.status === 'connected' && allReplicas.length > 0) {
+    const allPts = allReplicas
+      .filter(r => r.cap !== null)
+      .map(r => ({ x: r.N0, y: r.cap }));
+    const T = (P && P.duration) || 1800;
+    if (allPts.length >= 3) {
+      const fit = fitAllTypes(allPts, T);
+      if (fit) {
+        const rows = fit.all.map(f => {
+          const isBest = f.deltaAIC === 0;
+          return `<tr ${isBest ? 'style="background:rgba(122,145,70,0.08)"' : ''}>
+            <td>Type ${f.type}${isBest ? ' <span style="color:var(--data);font-size:9px">★ mejor</span>' : ''}</td>
+            <td style="text-align:right">${f.r2 !== null ? f.r2.toFixed(3) : '—'}</td>
+            <td style="text-align:right">${f.aic.toFixed(2)}</td>
+            <td style="text-align:right">${f.deltaAIC.toFixed(2)}</td>
+            <td style="text-align:right">${f.weight.toFixed(3)}</td>
+          </tr>`;
+        }).join('');
+        const best = fit.best;
+        paramsBlock = `
+          <h3>Parámetros estimados grupales <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· ajuste Holling con todo el curso</span></h3>
+          <p style="font-family:var(--serif);font-size:12px;color:var(--ink-soft);line-height:1.5;margin-bottom:10px">
+            Ajuste de los 3 modelos de respuesta funcional usando los <b>${allPts.length} puntos</b> de todos los grupos del curso. Comparación por AIC.
+          </p>
+          <table class="course-group-table" style="max-width:520px;margin-bottom:8px">
+            <thead><tr><th>Modelo</th><th style="text-align:right">R²</th><th style="text-align:right">AIC</th><th style="text-align:right">ΔAIC</th><th style="text-align:right">w</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div style="background:var(--bg);border-left:2px solid var(--gold);padding:10px 14px;font-family:var(--serif);font-size:12px;line-height:1.5;color:var(--ink-soft)">
+            <b>Mejor modelo:</b> Type ${best.type} con peso w = ${best.weight.toFixed(3)}.<br>
+            Parámetros: <code>a = ${best.a.toExponential(3)}</code>${best.type !== 'I' ? `, <code>Tₕ = ${best.Th.toFixed(2)}</code>` : ''}.
+          </div>
+        `;
+      }
+    } else {
+      paramsBlock = `
+        <h3>Parámetros estimados grupales <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· ajuste Holling con todo el curso</span></h3>
+        <p style="font-family:var(--serif);font-style:italic;font-size:12px;color:var(--muted);padding:16px;background:var(--bg);border-left:2px solid var(--border);margin-bottom:18px">
+          Necesitas ≥ 3 puntos con datos en el curso para ajustar Holling. Actualmente: ${allPts.length}.
+        </p>
+      `;
+    }
+  }
+
   return `
+    ${myDataBlock}
     ${courseBlock}
+    ${anovaBlock}
+    ${paramsBlock}
     <hr style="border:none;border-top:1.5px dashed var(--border);margin:22px 0">
     <h3>Datasets <span style="color:var(--muted);font-size:9px;letter-spacing:.1em;font-weight:400">· comparación con literatura</span></h3>
     <p style="font-family:var(--serif);font-size:12px;color:var(--ink-soft);line-height:1.5;margin-bottom:14px">
