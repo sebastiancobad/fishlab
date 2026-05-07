@@ -2834,6 +2834,7 @@ const sync = {
   unsubscribeReplicas: null,
   unsubscribeConclusions: null,
   remoteConclusions: {},     // { deviceId: {q1,q2,q3,groupName,updatedAt} }
+  allRemoteReplicas: [],     // TODAS las réplicas del curso (todos los grupos), para vista comparativa
   errorMsg: null,
   initialized: false,        // true después del 1er snapshot
 };
@@ -2918,15 +2919,24 @@ function findReplicaInTreatments(id) {
 }
 
 // Cuando llegan datos desde Firestore, reconstruir labData.treatments
+// SOLO con réplicas del usuario actual (cada grupo ve solo sus datos en Registrar/Analizar).
+// Las réplicas de otros grupos se mantienen en sync.allRemoteReplicas para Comparar.
 function rebuildTreatmentsFromRemote(remoteReplicas) {
+  // Guardar TODAS las remotas para uso del módulo docente y vista comparativa
+  sync.allRemoteReplicas = remoteReplicas || [];
+
+  // Filtrar solo las del usuario actual
+  const myDevice = getDeviceId();
+  const myReplicas = (remoteReplicas || []).filter(r => r.ownerId === myDevice);
+
   // Conservar tratamientos vacíos que el usuario haya creado localmente sin datos aún
   const existingTreatmentN0s = new Set(hollingState.labData.treatments.map(t => t.N0));
-  const remoteN0s = new Set(remoteReplicas.map(r => r.N0));
+  const remoteN0s = new Set(myReplicas.map(r => r.N0));
   const allN0s = [...new Set([...existingTreatmentN0s, ...remoteN0s])].sort((a,b) => a-b);
 
-  // Mantener: réplicas locales (no sincronizadas) + las remotas
+  // Mantener: réplicas locales (no sincronizadas) + las remotas DEL USUARIO ACTUAL
   const newTreatments = allN0s.map(N0 => {
-    const remoteReps = remoteReplicas.filter(r => r.N0 === N0);
+    const remoteReps = myReplicas.filter(r => r.N0 === N0);
     // Réplicas locales: conservar las que aún tienen id local (no han sido sincronizadas)
     const existingTr = hollingState.labData.treatments.find(t => t.N0 === N0);
     const localOnly = existingTr ? existingTr.replicas.filter(r => isLocalId(r.id)) : [];
@@ -6463,19 +6473,18 @@ function renderTeacherContent() {
   else if (teacherActiveTab === 'conclusions') c.innerHTML = renderConclusionsTab();
 }
 
-// ===== Tab "Por grupo": resumen agrupado por equipo =====
+// ===== Tab "Por grupo": resumen agrupado por equipo (TODOS los grupos del curso) =====
 function renderGroupsTab() {
-  const trs = hollingState.labData.treatments;
+  // Usar TODAS las réplicas remotas, no solo las del usuario actual
+  const allReplicas = sync.allRemoteReplicas || [];
 
   // Agrupar todas las réplicas por nombre de grupo
   const byGroup = {};
-  for (const tr of trs) {
-    for (const r of tr.replicas) {
-      if (r.cap === null && r.enc === null && r.att === null) continue;
-      const gname = (r.group || '').trim() || '(sin nombre)';
-      if (!byGroup[gname]) byGroup[gname] = { name: gname, members: r.members || '', replicas: [] };
-      byGroup[gname].replicas.push({ ...r, N0: tr.N0 });
-    }
+  for (const r of allReplicas) {
+    if (r.cap === null && r.enc === null && r.att === null) continue;
+    const gname = (r.group || '').trim() || '(sin nombre)';
+    if (!byGroup[gname]) byGroup[gname] = { name: gname, members: r.members || '', replicas: [] };
+    byGroup[gname].replicas.push(r);
   }
   const groups = Object.values(byGroup).sort((a,b) => a.name.localeCompare(b.name));
 
@@ -6593,14 +6602,12 @@ function renderGroupsTab() {
 
 function renderValidationTab() {
   const issues = validateLabData();
-  const trs = hollingState.labData.treatments;
-  let totalReps = 0, withData = 0, completas = 0;
-  for (const tr of trs) {
-    for (const r of tr.replicas) {
-      totalReps++;
-      if (r.cap !== null) withData++;
-      if (r.cap !== null && r.enc !== null && r.att !== null && r.rem !== null && r.t1att !== null) completas++;
-    }
+  // Para validación, usamos TODAS las réplicas remotas (todos los grupos del curso)
+  const allReplicas = sync.allRemoteReplicas || [];
+  let totalReps = allReplicas.length, withData = 0, completas = 0;
+  for (const r of allReplicas) {
+    if (r.cap !== null) withData++;
+    if (r.cap !== null && r.enc !== null && r.att !== null && r.rem !== null && r.t1att !== null) completas++;
   }
   const errorCount = issues.filter(i => i.severity === 'error').length;
   const warnCount = issues.filter(i => i.severity === 'warn').length;
@@ -6615,26 +6622,37 @@ function renderValidationTab() {
     </div>
   `).join('');
 
+  // Agrupar por N₀ para detección de outliers
+  const repsByN0 = {};
+  for (const r of allReplicas) {
+    if (r.cap === null && r.enc === null && r.att === null) continue;
+    if (!repsByN0[r.N0]) repsByN0[r.N0] = [];
+    repsByN0[r.N0].push(r);
+  }
+  // Calcular outliers POR TRATAMIENTO (todos los grupos juntos por N₀)
+  const outliersByN0 = {};
+  for (const N0 of Object.keys(repsByN0)) {
+    const caps = repsByN0[N0].map(r => r.cap).filter(v => v !== null);
+    outliersByN0[N0] = detectOutliers(caps);
+  }
+
   // Tabla de datos agrupada por grupo
   const repsByGroup = {};
-  for (const tr of trs) {
-    const caps = tr.replicas.map(r => r.cap).filter(v => v !== null);
-    const outlierIdx = detectOutliers(caps);
-    let validCounter = 0;
-    for (const r of tr.replicas) {
-      if (r.cap === null && r.enc === null && r.att === null) continue;
-      const flagged = (r.enc !== null && r.att !== null && r.att > r.enc) ||
-                      (r.att !== null && r.cap !== null && r.cap > r.att) ||
-                      (r.cap !== null && r.cap > tr.N0);
-      let outlier = false;
-      if (r.cap !== null) {
-        outlier = outlierIdx.has(validCounter);
-        validCounter++;
-      }
-      const gname = (r.group || '').trim() || '(sin nombre)';
-      if (!repsByGroup[gname]) repsByGroup[gname] = [];
-      repsByGroup[gname].push({ ...r, N0: tr.N0, flagged, outlier });
+  for (const r of allReplicas) {
+    if (r.cap === null && r.enc === null && r.att === null) continue;
+    const flagged = (r.enc !== null && r.att !== null && r.att > r.enc) ||
+                    (r.att !== null && r.cap !== null && r.cap > r.att) ||
+                    (r.cap !== null && r.cap > r.N0);
+    // Determinar si es outlier dentro de su tratamiento
+    let outlier = false;
+    if (r.cap !== null && outliersByN0[r.N0]) {
+      const capsInN0 = repsByN0[r.N0].map(rr => rr.cap).filter(v => v !== null);
+      const idxInN0 = capsInN0.findIndex(v => v === r.cap);
+      if (idxInN0 >= 0) outlier = outliersByN0[r.N0].has(idxInN0);
     }
+    const gname = (r.group || '').trim() || '(sin nombre)';
+    if (!repsByGroup[gname]) repsByGroup[gname] = [];
+    repsByGroup[gname].push({ ...r, flagged, outlier });
   }
   const sortedGroups = Object.keys(repsByGroup).sort();
   const dataBlocks = sortedGroups.map(gname => {
@@ -6701,20 +6719,18 @@ function escapeHtml(s) {
 }
 
 function renderAnalysisTab() {
-  const trs = hollingState.labData.treatments;
+  // Usar TODAS las réplicas remotas del curso (todos los grupos)
+  const allReplicas = sync.allRemoteReplicas || [];
   const allPts = [];
-  const groupedByN0 = [];
-  const labelsN0 = [];
-  for (const tr of trs) {
-    const caps = tr.replicas.map(r => r.cap).filter(v => v !== null);
-    if (caps.length > 0) {
-      groupedByN0.push(caps);
-      labelsN0.push(tr.N0);
-      for (const r of tr.replicas) {
-        if (r.cap !== null) allPts.push({ x: tr.N0, y: r.cap });
-      }
-    }
+  const byN0 = {};
+  for (const r of allReplicas) {
+    if (r.cap === null) continue;
+    if (!byN0[r.N0]) byN0[r.N0] = [];
+    byN0[r.N0].push(r.cap);
+    allPts.push({ x: r.N0, y: r.cap });
   }
+  const labelsN0 = Object.keys(byN0).map(Number).sort((a,b) => a-b);
+  const groupedByN0 = labelsN0.map(N0 => byN0[N0]);
 
   if (allPts.length < 2) {
     return `
@@ -6794,12 +6810,10 @@ function renderAnalysisTab() {
 
   // Por grupo (¿algún grupo es atípico?)
   const groupCaps = {};
-  for (const tr of trs) {
-    for (const r of tr.replicas) {
-      if (r.cap !== null && r.group && r.group.trim()) {
-        if (!groupCaps[r.group]) groupCaps[r.group] = [];
-        groupCaps[r.group].push({ N0: tr.N0, cap: r.cap });
-      }
+  for (const r of allReplicas) {
+    if (r.cap !== null && r.group && r.group.trim()) {
+      if (!groupCaps[r.group]) groupCaps[r.group] = [];
+      groupCaps[r.group].push({ N0: r.N0, cap: r.cap });
     }
   }
   const groupNames = Object.keys(groupCaps);
